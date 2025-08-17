@@ -1,0 +1,14 @@
+*.o
+*.elf
+*.bin
+*.a
+*.iso
+*.img
+.DS_Store
+.vscode
+
+docs/build
+sysroot
+sabi/*.c
+sabi/include
+!sabi/host.c
