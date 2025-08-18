@@ -2,6 +2,7 @@
 #include <kernel/time/hpet.h>
 #include <kernel/time/tsc.h>
 #include <kernel/x86/cpuid.h>
+#include <kernel/input/input.h>
 #include <kernel/debug.h>
 #include <time.h>
 
@@ -14,6 +15,12 @@ static time_t bts; // System timestamp at boot
 void timer_handler(int gsi, void *data)
 {
     ticks++;
+    if((ticks % 50) == 0)
+    {
+        // TOOD: We need a proper way to register timer events with a callback function,
+        // but for now we simply call this function every 50 ms.
+        input_kbd_auto_repeat();
+    }
 }
 
 uint64_t system_timestamp()

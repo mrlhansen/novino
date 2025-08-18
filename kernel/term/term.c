@@ -414,7 +414,7 @@ static void term_kbd_input(input_event_t *ev)
     }
 
     // Key releases
-    if(ev->value)
+    if(ev->value == 1)
     {
         return;
     }

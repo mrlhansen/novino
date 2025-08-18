@@ -6,8 +6,9 @@
 #include <kernel/errno.h>
 #include <kernel/lists.h>
 
-static spinlock_t lock;
 static LIST_INIT(pipes, pipe_t, link);
+static int repeat_count = 0;
+static int repeat_code = 0;
 
 static int input_kbd_open(file_t *file)
 {
@@ -36,6 +37,19 @@ static int input_kbd_read(file_t *file, size_t size, void *buf)
     return pipe_read(file->data, size, buf);
 }
 
+void input_kbd_auto_repeat()
+{
+    if(repeat_code)
+    {
+        repeat_count--;
+        if(repeat_count == 0)
+        {
+            input_kbd_write(repeat_code, 2);
+            repeat_count = 1;
+        }
+    }
+}
+
 void input_kbd_write(int code, int value)
 {
     pipe_t *pipe = pipes.head;
@@ -46,6 +60,17 @@ void input_kbd_write(int code, int value)
         .value = value,
     };
 
+    if(value == 0)
+    {
+        repeat_count = 12;
+        repeat_code = code;
+    }
+    else if(value == 1)
+    {
+        repeat_count = 0;
+        repeat_code = 0;
+    }
+
     while(pipe)
     {
         pipe_write(pipe, sizeof(event), &event);
@@ -55,13 +80,15 @@ void input_kbd_write(int code, int value)
 
 void input_kbd_init()
 {
+    // ioctl could be used for controlling keyboard leds
+    // ioctl could be used for enabling/disabling autorepeat events
     static devfs_ops_t ops = {
         .open = input_kbd_open,
         .close = input_kbd_close,
         .read = input_kbd_read,
         .write = 0,
         .seek = 0,
-        .ioctl = 0, // use this to control keyboard leds? We need to register keyboards with a callback function
+        .ioctl = 0,
     };
     devfs_register(0, "keyboard", &ops, 0, I_STREAM, 0);
 }

@@ -14,6 +14,8 @@ void input_mouse_init();
 
 void input_kbd_usb_boot_protocol(uint64_t, uint64_t);
 void input_kbd_write(int, int);
+void input_kbd_auto_repeat();
 void input_kbd_init();
+
 
 void input_init();
