@@ -5,6 +5,7 @@
 
 static int oneflg = 0;
 static int longflg = 0;
+static int allflg = 0;
 
 static void ls(const char *path, DIR *dp)
 {
@@ -14,6 +15,10 @@ static void ls(const char *path, DIR *dp)
 
     while(dent = readdir(dp), dent)
     {
+        if(!allflg && dent->d_name[0] == '.')
+        {
+            continue;
+        }
         if(oneflg)
         {
             printf("%s\n", dent->d_name);
@@ -57,11 +62,7 @@ int main(int argc, char *argv[])
     int errflg = 0;
     int c;
 
-    // tmp
-    oneflg = 0;
-    longflg = 0;
-
-    while(c = getopt(argc, argv, ":1l"), c != -1)
+    while(c = getopt(argc, argv, ":1la"), c != -1)
     {
         switch(c)
         {
@@ -70,6 +71,9 @@ int main(int argc, char *argv[])
                 break;
             case 'l':
                 longflg++;
+                break;
+            case 'a':
+                allflg++;
                 break;
             default:
                 printf("unrecognized option: '-%c'\n", optopt);

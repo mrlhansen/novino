@@ -31,9 +31,6 @@ int main(int argc, char *argv[])
     int errflg = 0;
     int c;
 
-    // tmp
-    nflg = 0;
-
     while(c = getopt(argc, argv, ":n"), c != -1)
     {
         switch(c)

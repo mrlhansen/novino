@@ -334,6 +334,32 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
     return 0;
 }
 
+static int vfs_dirent_append(void *buf, int pos, int size, const char *name, inode_t *inode)
+{
+    dirent_t *dirent;
+    int len;
+
+    dirent = (dirent_t*)(buf + pos);
+    len = 1 + sizeof(dirent_t) + strlen(name);
+
+    if(pos+len < size)
+    {
+        dirent->length = len;
+        dirent->flags = inode->flags;
+        strcpy(dirent->name, name);
+        return pos + len;
+    }
+
+    if(pos)
+    {
+        return pos;
+    }
+    else
+    {
+        return -EINVAL;
+    }
+}
+
 void vfs_filler(void *data, const char *fn, inode_t *ip)
 {
     dentry_t *parent, *child;
@@ -367,13 +393,10 @@ void vfs_filler(void *data, const char *fn, inode_t *ip)
 
 int vfs_readdir(int id, size_t count, dirent_t *dirent)
 {
-    uint32_t rdc, len, seek;
+    int pos, seek, status;
     vfs_mp_t *mp;
     vfs_fs_t *fs;
-    uint8_t *buf;
     dentry_t *dp;
-    inode_t *ip;
-    int status;
     fd_t *fd;
 
     fd = fd_find(id);
@@ -382,19 +405,18 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
         return -EBADF;
     }
 
-    buf = (uint8_t*)dirent;
     seek = fd->file->seek;
     dp = fd->file->dentry;
-    ip = fd->file->inode;
-    fs = ip->fs;
+    fs = dp->inode->fs;
     mp = mpl.head;
-    rdc = 0;
+    pos = 0;
 
     if((fd->file->flags & O_DIR) == 0)
     {
         return -ENOTDIR;
     }
 
+    // special case for root
     if(dp == root)
     {
         while(seek && mp)
@@ -405,35 +427,23 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
 
         while(mp)
         {
-            dirent = (dirent_t*)(buf + rdc);
-            len = 1 + sizeof(dirent_t) + strlen(mp->name);
-
-            if(rdc+len < count)
+            status = vfs_dirent_append(dirent, pos, count, mp->name, &mp->inode);
+            if(status > pos)
             {
-                dirent->length = len;
-                dirent->flags = mp->inode.flags;
-                strcpy(dirent->name, mp->name);
+                pos = status;
                 fd->file->seek++;
-                rdc += len;
             }
             else
             {
-                if(rdc)
-                {
-                    return rdc;
-                }
-                else
-                {
-                    return -EINVAL; // buffer did not fit any elements
-                }
+                return status;
             }
-
             mp = mp->link.next;
         }
 
-        return rdc;
+        return pos;
     }
 
+    // cache directory content
     if(dp->cached == 0)
     {
         status = fs->ops->readdir(fd->file, dp);
@@ -444,6 +454,38 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
         dp->cached = 1;
     }
 
+    // special case for . entry
+    if(fd->file->seek == 0)
+    {
+        status = vfs_dirent_append(dirent, pos, count, ".", dp->inode);
+        if(status > pos)
+        {
+            pos = status;
+            fd->file->seek++;
+        }
+        else
+        {
+            return status;
+        }
+    }
+
+    // special case for .. entry
+    if(fd->file->seek == 1)
+    {
+        status = vfs_dirent_append(dirent, pos, count, "..", dp->parent->inode);
+        if(status > pos)
+        {
+            pos = status;
+            fd->file->seek++;
+        }
+        else
+        {
+            return status;
+        }
+    }
+
+    // seek to the correct position
+    seek = fd->file->seek - 2;
     dp = dp->child;
 
     while(seek && dp)
@@ -455,6 +497,7 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
         dp = dp->next;
     }
 
+    // append entries
     while(dp)
     {
         if(dp->invalid)
@@ -463,33 +506,20 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
             continue;
         }
 
-        dirent = (dirent_t*)(buf + rdc);
-        len = 1 + sizeof(dirent_t) + strlen(dp->name);
-
-        if(rdc+len < count)
+        status = vfs_dirent_append(dirent, pos, count, dp->name, dp->inode);
+        if(status > pos)
         {
-            dirent->length = len;
-            dirent->flags = dp->inode->flags;
-            strcpy(dirent->name, dp->name);
+            pos = status;
             fd->file->seek++;
-            rdc += len;
         }
         else
         {
-            if(rdc)
-            {
-                return rdc;
-            }
-            else
-            {
-                return -EINVAL; // buffer did not fit any elements
-            }
+            return status;
         }
-
         dp = dp->next;
     }
 
-    return rdc;
+    return pos;
 }
 
 int vfs_fstat(int id, stat_t *stat)
