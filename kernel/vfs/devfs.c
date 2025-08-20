@@ -267,16 +267,28 @@ static int devfs_ioctl(file_t *file, size_t cmd, size_t val)
     return ops->ioctl(file, cmd, val);
 }
 
-static int devfs_readdir(file_t *file, void *data)
+static int devfs_readdir(file_t *file, size_t seek, void *data)
 {
     devfs_t *parent, *curr;
+    int status;
 
     parent = file->inode->obj;
     curr = parent->child;
 
     while(curr)
     {
-        vfs_filler(data, curr->name, &curr->inode);
+        if(seek)
+        {
+            seek--;
+        }
+        else
+        {
+            status = vfs_put_dirent(data, curr->name, &curr->inode);
+            if(status < 0)
+            {
+                break;
+            }
+        }
         curr = curr->next;
     }
 

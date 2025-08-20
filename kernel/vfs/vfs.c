@@ -245,10 +245,9 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
 {
     autofree(vfs_path_t) *path;
     dentry_t *parent, *child;
-    inode_t inode;
+    inode_t inode, *ip;
     vfs_mp_t *mp;
     vfs_fs_t *fs;
-    int invalid;
     int status;
 
     path = vfs_new_path(pathname);
@@ -293,28 +292,24 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
 
         if(child)
         {
-            if(child->invalid)
+            if(!child->inode)
             {
                 return -ENOENT;
             }
         }
         else
         {
-            invalid = 0;
+            ip = &inode;
             fs = parent->inode->fs;
-            memset(&inode, 0, sizeof(inode));
+            memset(ip, 0, sizeof(inode));
 
-            status = fs->ops->lookup(parent->inode,  path->curr, &inode);
+            status = fs->ops->lookup(parent->inode, path->curr, ip);
             if(status < 0)
             {
-                invalid = 1;
+                ip = 0;
             }
 
-            inode.fs = parent->inode->fs;
-            inode.mp = parent->inode->mp;
-            inode.data = parent->inode->data;
-
-            child = dcache_append(parent, path->curr, &inode, invalid);
+            child = dcache_append(parent, path->curr, ip);
             *dp = child;
 
             if(child == 0)
@@ -334,66 +329,70 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
     return 0;
 }
 
-static int vfs_dirent_append(void *buf, int pos, int size, const char *name, inode_t *inode)
+int vfs_put_dirent(void *data, const char *name, inode_t *inode)
 {
+    dentry_t *parent, *child;
     dirent_t *dirent;
+    vfs_rd_t *rd;
     int len;
 
-    dirent = (dirent_t*)(buf + pos);
+    rd = data;
+    parent = rd->parent;
+
+    // omit extraneous . and .. (not sure about this yet, we might need to force the fs code to not put them)
+    if(rd->file->seek >= 2)
+    {
+        if(strcmp(name, ".") == 0)
+        {
+            return 0;
+        }
+        if(strcmp(name, "..") == 0)
+        {
+            return 0;
+        }
+    }
+
+    // append to dirent
+    dirent = (dirent_t*)(rd->dirent + rd->pos);
     len = 1 + sizeof(dirent_t) + strlen(name);
 
-    if(pos+len < size)
+    if(rd->pos + len < rd->size)
     {
+        rd->file->seek++;
+        rd->pos += len;
+        rd->status = rd->pos;
+
         dirent->length = len;
         dirent->flags = inode->flags;
         strcpy(dirent->name, name);
-        return pos + len;
-    }
-
-    if(pos)
-    {
-        return pos;
     }
     else
     {
-        return -EINVAL;
+        if(!rd->pos)
+        {
+            rd->status = -EINVAL;
+        }
+        return -ENOSPC;
     }
+
+    // append to dcache
+    if(!parent)
+    {
+        return 0;
+    }
+
+    child = dcache_lookup(parent, name);
+    if(child == 0)
+    {
+        dcache_append(parent, name, inode);
+    }
+
+    return 0;
 }
 
-void vfs_filler(void *data, const char *fn, inode_t *ip)
+int vfs_readdir(int id, size_t size, dirent_t *dirent)
 {
-    dentry_t *parent, *child;
-    inode_t *inode;
-
-    if(strcmp(fn, ".") == 0)
-    {
-        return;
-    }
-
-    if(strcmp(fn, "..") == 0)
-    {
-        return;
-    }
-
-    parent = data;
-    inode = parent->inode;
-
-    child = dcache_lookup(parent, fn);
-    if(child)
-    {
-        return;
-    }
-
-    ip->fs = inode->fs;
-    ip->mp = inode->mp;
-    ip->data = inode->data;
-
-    dcache_append(parent, fn, ip, 0);
-}
-
-int vfs_readdir(int id, size_t count, dirent_t *dirent)
-{
-    int pos, seek, status;
+    int seek, status;
     vfs_mp_t *mp;
     vfs_fs_t *fs;
     dentry_t *dp;
@@ -405,16 +404,47 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
         return -EBADF;
     }
 
-    seek = fd->file->seek;
-    dp = fd->file->dentry;
-    fs = dp->inode->fs;
-    mp = mpl.head;
-    pos = 0;
-
     if((fd->file->flags & O_DIR) == 0)
     {
         return -ENOTDIR;
     }
+
+    seek = fd->file->seek;
+    dp = fd->file->dentry;
+    fs = dp->inode->fs;
+    mp = mpl.head;
+
+    vfs_rd_t rd = {
+        .file = fd->file,
+        .parent = 0,
+        .status = 0,
+        .dirent = dirent,
+        .size = size,
+        .pos = 0,
+    };
+
+    // special case for . entry
+    if(fd->file->seek == 0)
+    {
+        status = vfs_put_dirent(&rd, ".", dp->inode);
+        if(status < 0)
+        {
+            return rd.status;
+        }
+    }
+
+    // special case for .. entry
+    if(fd->file->seek == 1)
+    {
+        status = vfs_put_dirent(&rd, "..", dp->parent->inode);
+        if(status < 0)
+        {
+            return rd.status;
+        }
+    }
+
+    // adjust seek
+    seek = fd->file->seek - 2;
 
     // special case for root
     if(dp == root)
@@ -427,70 +457,47 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
 
         while(mp)
         {
-            status = vfs_dirent_append(dirent, pos, count, mp->name, &mp->inode);
-            if(status > pos)
+            status = vfs_put_dirent(&rd, mp->name, &mp->inode);
+            if(status < 0)
             {
-                pos = status;
-                fd->file->seek++;
-            }
-            else
-            {
-                return status;
+                return rd.status;
             }
             mp = mp->link.next;
         }
 
-        return pos;
+        return rd.status;
     }
 
     // cache directory content
     if(dp->cached == 0)
     {
-        status = fs->ops->readdir(fd->file, dp);
+        if(1) // enable caching
+        {
+            rd.parent = dp;
+        }
+
+        status = fs->ops->readdir(fd->file, seek, &rd);
         if(status < 0)
         {
             return status;
         }
-        dp->cached = 1;
-    }
 
-    // special case for . entry
-    if(fd->file->seek == 0)
-    {
-        status = vfs_dirent_append(dirent, pos, count, ".", dp->inode);
-        if(status > pos)
+        if(rd.status == 0)
         {
-            pos = status;
-            fd->file->seek++;
+            if(fd->file->seek == dp->positive + 2)
+            {
+                dp->cached = 1;
+            }
         }
-        else
-        {
-            return status;
-        }
-    }
 
-    // special case for .. entry
-    if(fd->file->seek == 1)
-    {
-        status = vfs_dirent_append(dirent, pos, count, "..", dp->parent->inode);
-        if(status > pos)
-        {
-            pos = status;
-            fd->file->seek++;
-        }
-        else
-        {
-            return status;
-        }
+        return rd.status;
     }
 
     // seek to the correct position
-    seek = fd->file->seek - 2;
     dp = dp->child;
-
     while(seek && dp)
     {
-        if(!dp->invalid)
+        if(dp->inode)
         {
             seek--;
         }
@@ -500,26 +507,21 @@ int vfs_readdir(int id, size_t count, dirent_t *dirent)
     // append entries
     while(dp)
     {
-        if(dp->invalid)
+        if(!dp->inode)
         {
             dp = dp->next;
             continue;
         }
 
-        status = vfs_dirent_append(dirent, pos, count, dp->name, dp->inode);
-        if(status > pos)
+        status = vfs_put_dirent(&rd, dp->name, dp->inode);
+        if(status < 0)
         {
-            pos = status;
-            fd->file->seek++;
-        }
-        else
-        {
-            return status;
+            return rd.status;
         }
         dp = dp->next;
     }
 
-    return pos;
+    return rd.status;
 }
 
 int vfs_fstat(int id, stat_t *stat)
@@ -1004,7 +1006,6 @@ void vfs_init()
     };
 
     static dentry_t dentry = {
-        .invalid = 0,
         .inode = &inode
     };
 

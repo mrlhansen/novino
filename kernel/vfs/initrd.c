@@ -63,6 +63,8 @@ static void tar2inode(ustar_t *tar, inode_t *inode)
     }
 
     inode->size = tar->isize;
+    inode->blksz = 512;
+    inode->blocks = (tar->isize + 511) / 512;
     inode->mode = oct2bin(tar->mode, 8);
     inode->uid  = oct2bin(tar->uid, 8);
     inode->gid  = oct2bin(tar->gid, 8);
@@ -119,9 +121,9 @@ static int initrd_seek(file_t *file, long offset, int origin)
     return file->seek;
 }
 
-static int initrd_readdir(file_t *file, void *data)
+static int initrd_readdir(file_t *file, size_t seek, void *data)
 {
-    int depth, len;
+    int depth, len, status;
     char *dirname;
     inode_t inode;
     ustar_t *tar;
@@ -159,9 +161,21 @@ static int initrd_readdir(file_t *file, void *data)
         }
 
         tar2inode(tar, &inode);
-        if(inode.flags)
+        if(!inode.flags)
         {
-            vfs_filler(data, tar->basename, &inode);
+            continue;
+        }
+
+        if(seek)
+        {
+            seek--;
+            continue;
+        }
+
+        status = vfs_put_dirent(data, tar->basename, &inode);
+        if(status < 0)
+        {
+            break;
         }
     }
 

@@ -3,7 +3,7 @@
 #include <kernel/vfs/types.h>
 
 dentry_t *dcache_lookup(dentry_t*, const char*);
-dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode, int invalid);
+dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode);
 
 // TODO: should all these return ssize_t and same for the corresponding vfs_ops ?
 int vfs_open(const char *pathname, int flags);
@@ -18,7 +18,7 @@ int vfs_chdir(const char *pathname);
 int vfs_getcwd(char *pathname, int size);
 int vfs_readdir(int fd, size_t count, dirent_t *dirent);
 
-void vfs_filler(void*, const char*, inode_t*);
+int vfs_put_dirent(void*, const char*, inode_t*);
 int vfs_mount(const char*, const char*, const char*);
 
 int vfs_register(const char*, vfs_ops_t*);

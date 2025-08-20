@@ -66,17 +66,23 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode, int 
     strcpy(dentry->name, name);
     dentry->hash = dentry_hash(dentry->name);
 
-    dentry->inode[0] = inode[0];
-    dentry->invalid = invalid;
-    dentry->cached = 0;
-    dentry->count = 0;
+    if(inode)
+    {
+        dentry->inode[0] = inode[0];
+        dentry->inode->fs = parent->inode->fs;
+        dentry->inode->mp = parent->inode->mp;
+        dentry->inode->data = parent->inode->data;
+        parent->positive++;
+    }
+    else
+    {
+        parent->negative++;
+        dentry->inode = 0;
+    }
 
     dentry->parent = parent;
-    dentry->child = 0;
     dentry->next = parent->child;
-
     parent->child = dentry;
-    parent->count++;
 
     return dentry;
 }

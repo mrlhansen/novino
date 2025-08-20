@@ -64,11 +64,11 @@ struct inode {
 // Directory entry (dcache)
 struct dentry {
     char name[MAX_LFN];  // Entry name
-    uint64_t hash;       // Hash of entry name
-    uint8_t invalid;     // Non-existing entry
     uint8_t cached;      // All child entries are cached
-    uint32_t count;      // Number of child entries
-    inode_t *inode;      // Associated inode
+    uint64_t hash;       // Hash of entry name
+    uint32_t positive;   // Number of valid entries
+    uint32_t negative;   // Number of negative entries
+    inode_t *inode;      // Associated inode (zero for negative entries)
 
     dentry_t *parent;    // Parent entry
     dentry_t *child;     // Child entries
@@ -115,7 +115,7 @@ typedef struct vfs_ops {
     int (*write)(file_t*, size_t, void*);
     int (*seek)(file_t*, long, int); // define off_t ?
     int (*ioctl)(file_t*, size_t, size_t);
-    int (*readdir)(file_t*, void*);
+    int (*readdir)(file_t*, size_t, void*);
     int (*lookup)(inode_t*, const char*, inode_t*);
     void* (*mount)(devfs_t*, inode_t*);
     int (*umount)(void*);
@@ -134,6 +134,7 @@ typedef struct devfs_ops {
 // Filesystem
 struct vfs_fs {
     char name[MAX_SFN]; // Name of filesystem
+    uint32_t flags;     // Filesystem flags
     vfs_ops_t *ops;     // Operations
     link_t link;        // Link for list of filesystems
 };
@@ -158,7 +159,7 @@ typedef struct devfs {
     devfs_t *child;   // Link to children
 };
 
-// Struct for VFS path iteration
+// Internal struct for VFS path iteration
 typedef struct {
     char *prev;
     char *curr;
@@ -167,3 +168,13 @@ typedef struct {
     dentry_t *root;
     char path[];
 } vfs_path_t;
+
+// Internal struct for readdir
+typedef struct {
+    file_t *file;     // File context
+    dentry_t *parent; // Parent directory entry
+    ssize_t status;   // Propagated return status
+    void *dirent;     // Buffer for entries
+    size_t size;      // Buffer size
+    size_t pos;       // Buffer position
+} vfs_rd_t;
