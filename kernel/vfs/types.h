@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel/atomic.h>
 #include <kernel/lists.h>
 #include <kernel/types.h>
 
@@ -98,7 +99,7 @@ typedef struct {
 
 // Context for an open file
 typedef struct file {
-    size_t links;      // Number of file descriptor references
+    atomic_t refs;     // Number of file descriptor references
     size_t flags;      // Flags
     size_t seek;       // Current position
     dentry_t *dentry;  // Directory entry for the file
@@ -151,12 +152,12 @@ struct vfs_mp {
 
 // Device file
 typedef struct devfs {
-    char name[16];    // Name of device
-    inode_t inode;    // Device inode
-    devfs_ops_t *ops; // Operations
-    void *data;       // Private device data
-    devfs_t *next;    // Link to next
-    devfs_t *child;   // Link to children
+    char name[MAX_SFN]; // Name of device
+    inode_t inode;      // Device inode
+    devfs_ops_t *ops;   // Operations
+    void *data;         // Private device data
+    devfs_t *next;      // Link to next
+    devfs_t *child;     // Link to children
 };
 
 // Internal struct for VFS path iteration

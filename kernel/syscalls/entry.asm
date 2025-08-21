@@ -3,7 +3,7 @@ global syscall_address
 extern syscall_table
 extern syscall_count
 
-SECTION .text
+[SECTION .text]
 syscall_entry:
     cli
     cmp rax, qword [syscall_count]
@@ -43,6 +43,6 @@ syscall_entry:
 .ret:
     o64 sysret
 
-SECTION .rodata
+[SECTION .rodata]
 syscall_address:
     dq syscall_entry

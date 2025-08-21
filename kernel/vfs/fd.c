@@ -26,7 +26,7 @@ fd_t *fd_create(file_t *file)
     process = process_handle();
     fd->id = process->fd.next++;
     fd->file = file;
-    file->links++;
+    atomic_inc(&file->refs);
     list_insert(&process->fd.list, fd);
 
     return fd;
@@ -61,16 +61,17 @@ fd_t *fd_find(int id)
 file_t *fd_delete(fd_t *fd)
 {
     process_t *process;
+    atomic_t refs;
     file_t *file;
 
     process = process_handle();
     list_remove(&process->fd.list, fd);
 
     file = fd->file;
-    file->links--; // TODO: file context needs a lock
+    refs = atomic_dec(&file->refs);
     kfree(fd);
 
-    if(file->links == 0)
+    if(refs == 0)
     {
         return file;
     }

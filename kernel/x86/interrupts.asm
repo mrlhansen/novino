@@ -3,7 +3,7 @@ extern isr_handler
 extern irq_handler
 extern schedule_handler
 
-SECTION .text
+[SECTION .text]
 %macro ISR_NOERRCODE 1
 global isr%1:function (isr%1.end - isr%1)
 isr%1:
@@ -168,7 +168,7 @@ isr_schedule:
     iretq                           ; return from interrupt
 .end:
 
-SECTION .data
+[SECTION .rodata]
 global irq_stubs:data (irq_stubs.end - irq_stubs)
 irq_stubs:
 %assign n 0

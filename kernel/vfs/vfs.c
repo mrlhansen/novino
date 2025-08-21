@@ -288,8 +288,6 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
         }
 
         child = dcache_lookup(parent, path->curr);
-        *dp = child;
-
         if(child)
         {
             if(!child->inode)
@@ -310,19 +308,17 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             }
 
             child = dcache_append(parent, path->curr, ip);
-            *dp = child;
-
             if(child == 0)
             {
                 return -ENOMEM;
             }
-
             if(status < 0)
             {
                 return status;
             }
         }
 
+        *dp = child;
         parent = child;
     }
 
