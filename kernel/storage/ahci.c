@@ -5,45 +5,13 @@
 #include <kernel/mem/heap.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/x86/irq.h>
+#include <kernel/time/time.h>
 #include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <string.h>
 #include <stdio.h>
 
 static int bus_id = -1;
-
-static int find_cmd_slot(ahci_dev_t *dev)
-{
-    uint32_t bits;
-    uint8_t ncs;
-
-    bits = (dev->port->sact | dev->port->ci);
-    ncs = dev->host->ncs;
-
-    for(int i = 0; i < ncs; i++)
-    {
-        if((bits & (1 << i)) == 0)
-        {
-            return i;
-        }
-    }
-
-    return -ENXIO;
-}
-
-static void ahci_start_cmd(hba_port_t *port)
-{
-    while(port->cmd & PxCMD_CR);
-    port->cmd |= PxCMD_FRE;
-    port->cmd |= PxCMD_ST;
-}
-
-static void ahci_stop_cmd(hba_port_t *port)
-{
-    port->cmd &= ~PxCMD_ST;
-    port->cmd &= ~PxCMD_FRE;
-    while(port->cmd & (PxCMD_FR | PxCMD_CR));
-}
 
 static void ahci_handler(int gsi, void *data)
 {
@@ -71,23 +39,369 @@ static void ahci_handler(int gsi, void *data)
             status = port->is;
             port->is = status;
 
-            if(status & dev->irq.type)
+            dev->irq.status = status;
+            dev->irq.flag = 1;
+
+            if(dev->irq.signal)
             {
-                dev->irq.status = status;
-                dev->irq.flag = 1;
-
-                if(dev->irq.signal)
-                {
+                 if(status & dev->irq.type)
+                 {
                     thread_signal(dev->wk.thread);
-                }
-
-                dev->irq.type = 0;
-                dev->irq.signal = 0;
+                    dev->irq.signal = 0;
+                 }
             }
         }
     }
 
     host->hba->is = is;
+}
+
+static int find_cmd_slot(ahci_dev_t *dev)
+{
+    uint32_t bits;
+    uint8_t ncs;
+
+    bits = (dev->port->sact | dev->port->ci);
+    ncs = dev->host->ncs;
+
+    for(int i = 0; i < ncs; i++)
+    {
+        if((bits & (1 << i)) == 0)
+        {
+            return i;
+        }
+    }
+
+    return -ENOSPC;
+}
+
+static int ahci_submit_command(ahci_dev_t *dev, ahci_fis_t *fis, ahci_prd_t *prd, int numprd, int write)
+{
+    hba_chdr_t *clb;
+    hba_ctbl_t *ctb;
+    int slot;
+
+    if(fis->type != FIS_TYPE_REG_H2D)
+    {
+        kp_info("ahci", "unimplemented FIS type: %d", fis->type);
+        return -EFAIL;
+    }
+
+    fis_reg_h2d_t h2d = {
+        .type = fis->type,
+        .pmport = 0,
+        .rsv0 = 0,
+        .c = 1,
+        .command = fis->command,
+        .feature0 = fis->features,
+        .lba0 = fis->lba,
+        .device = fis->device,
+        .lba1 = (fis->lba >> 24),
+        .feature1 = 0,
+        .count = fis->count,
+        .icc = 0,
+        .control = 0,
+        .rsv1 = 0,
+    };
+
+    slot = find_cmd_slot(dev);
+    if(slot < 0)
+    {
+        return slot;
+    }
+
+    clb = dev->clb + slot;
+    ctb = dev->ctb + slot;
+
+    memcpy(ctb->cfis, &h2d, sizeof(h2d));
+    if(fis->atapi)
+    {
+        clb->atapi = 1;
+        memcpy(ctb->acmd, fis->packet, 16);
+    }
+
+    clb->cfl = sizeof(h2d) / 4;
+    clb->write = write;
+    clb->prdtl = numprd;
+
+    for(int i = 0; i < numprd; i++)
+    {
+        ctb->prdt[i].dba = prd->phys;
+        ctb->prdt[i].dbc = prd->size - 1;
+        ctb->prdt[i].ioc = prd->ioc;
+    }
+
+    dev->port->ci |= (1 << slot);
+
+    return 0;
+}
+
+static int ahci_poll_event(ahci_dev_t *dev, int type)
+{
+    uint64_t now, end;
+
+    now = system_timestamp();
+    end = now + 100'000'000; // 100ms
+
+    while(now < end)
+    {
+        if(dev->irq.flag)
+        {
+            if(dev->irq.status & PxIS_TFES)
+            {
+                kp_info("ahci", "TFES flag set");
+                return -EIO;
+            }
+            else if(dev->irq.status & type)
+            {
+                return 0;
+            }
+        }
+        now = system_timestamp();
+    }
+
+    kp_error("ahci", "polling timed out for: %x", type);
+    return -ENOINT;
+}
+
+static void ahci_start_cmd(hba_port_t *port)
+{
+    while(port->cmd & PxCMD_CR);
+    port->cmd |= PxCMD_FRE;
+    port->cmd |= PxCMD_ST;
+}
+
+static void ahci_stop_cmd(hba_port_t *port)
+{
+    port->cmd &= ~PxCMD_ST;
+    port->cmd &= ~PxCMD_FRE;
+    while(port->cmd & (PxCMD_FR | PxCMD_CR));
+}
+
+static int ahci_identify_device(ahci_dev_t *dev)
+{
+    ahci_fis_t fis;
+    ahci_prd_t prd;
+    int status;
+
+    fis.type = FIS_TYPE_REG_H2D;
+    fis.atapi = 0;
+    fis.command = (dev->atapi ? ATA_CMD_IDENTIFY_PACKET : ATA_CMD_IDENTIFY);
+    fis.features = 0;
+    fis.device = 0;
+    fis.lba = 0;
+    fis.count = 0;
+
+    prd.phys = dev->dma.phys;
+    prd.size = 512;
+    prd.ioc = 1;
+
+    dev->irq.flag = 0; // clear this when submitting command?
+    dev->irq.type = PxIS_PSS;
+    dev->irq.signal = 0;
+
+    status = ahci_submit_command(dev, &fis, &prd, 1, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    status = ahci_poll_event(dev, PxIS_PSS);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    libata_identify((uint16_t*)dev->dma.virt, &dev->disk);
+    libata_print(&dev->disk, "ahci", bus_id, dev->id);
+
+    return 0;
+}
+
+static int ahci_atapi_packet(ahci_dev_t *dev, uint8_t *packet, int size)
+{
+    ahci_fis_t fis;
+    ahci_prd_t prd;
+    int numprd = 0;
+    int status;
+
+    fis.type = FIS_TYPE_REG_H2D;
+    fis.atapi = 1;
+    fis.command = ATA_CMD_PACKET;
+    fis.features = 0;
+    fis.device = 0;
+    fis.lba = 0;
+    fis.count = 0;
+
+    if(size > 0)
+    {
+        prd.phys = dev->dma.phys;
+        prd.size = size;
+        prd.ioc = 1;
+
+        fis.features = 1; // ATA_FEAT_PACKET_DMA
+        numprd++;
+    }
+
+    for(int i = 0; i < 16; i++)
+    {
+        fis.packet[i] = packet[i];
+    }
+
+    dev->irq.flag = 0;
+    dev->irq.type = PxIS_DHRS;
+    dev->irq.signal = 0;
+
+    status = ahci_submit_command(dev, &fis, &prd, numprd, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    status = ahci_poll_event(dev, PxIS_DHRS);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    return 0;
+}
+
+static int ahci_atapi_read_capacity(ahci_dev_t *dev)
+{
+    int bps, sectors, status;
+    uint8_t packet[16] = {0};
+    uint8_t *data;
+
+    packet[0] = ATAPI_CMD_READ_CAPACITY;
+    status = ahci_atapi_packet(dev, packet, 8);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    data = (void*)dev->dma.virt;
+
+    sectors = data[0];
+    sectors = (sectors << 8) | data[1];
+    sectors = (sectors << 8) | data[2];
+    sectors = (sectors << 8) | data[3];
+
+    bps = data[4];
+    bps = (bps << 8) | data[5];
+    bps = (bps << 8) | data[6];
+    bps = (bps << 8) | data[7];
+
+    dev->disk.sectors = sectors;
+    dev->disk.bps = bps;
+
+    return 0;
+}
+
+static int ahci_atapi_request_sense(ahci_dev_t *dev)
+{
+    uint8_t packet[16] = {0};
+    uint8_t *data;
+    int status;
+    int code;
+    int key;
+
+    packet[0] = ATAPI_REQUEST_SENSE;
+    packet[4] = 18;
+    status = ahci_atapi_packet(dev, packet, 18);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    data = (void*)dev->dma.virt;
+    key = (data[2] & 0x0F);
+    code = data[12];
+
+    if(key)
+    {
+        return (code << 12) | key;
+    }
+
+    return 0;
+}
+
+static int ahci_atapi_test_unit_ready(ahci_dev_t *dev)
+{
+    uint8_t packet[16] = {0};
+    int status;
+
+    packet[0] = ATAPI_TEST_UNIT_READY;
+    status = ahci_atapi_packet(dev, packet, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    status = ahci_poll_event(dev, PxIS_DHRS);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    return 0;
+}
+
+static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
+{
+    ahci_fis_t fis;
+    ahci_prd_t prd;
+    int status;
+
+    fis.type = FIS_TYPE_REG_H2D;
+    fis.atapi = 0;
+    fis.command = ATA_CMD_READ_DMA_EXT;
+    fis.features = 0;
+    fis.device = (1 << 6); // LBA mode
+    fis.lba = lba;
+    fis.count = count;
+
+    prd.phys = dev->dma.phys;
+    prd.size = 512 * count;
+    prd.ioc = 1;
+
+    dev->irq.flag = 0; // clear this when submitting command?
+    dev->irq.type = PxIS_DHRS;
+    dev->irq.signal = 1;
+
+    status = ahci_submit_command(dev, &fis, &prd, 1, write);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    thread_wait();
+    // PxIS_TFES set?
+
+    return 0;
+}
+
+static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
+{
+    int status;
+    ahci_dev_t *dev;
+
+    dev = dp;
+    status = ahci_rw_dma(dev, 0, lba, count);
+    memcpy(buf, (void*)dev->dma.virt, count*512);
+
+    return status;
+}
+
+static int ahci_read(file_t *file, size_t size, void *buf)
+{
+    ahci_dev_t *dev;
+    int status;
+// TODO: need to decide if we are working in bytes or blocks for block devices (size and seek)
+    dev = file->data;
+    status = libata_queue(&dev->wk, dev, 0, file->seek, size, buf);
+
+    return status;
 }
 
 static int ahci_rebase(ahci_dev_t *dev)
@@ -139,159 +453,6 @@ static int ahci_rebase(ahci_dev_t *dev)
     return 0;
 }
 
-static int ahci_identify_device(ahci_dev_t *dev)
-{
-    fis_reg_h2d_t *fis;
-    hba_chdr_t *clb;
-    hba_ctbl_t *ctb;
-    ata_info_t info;
-    uint8_t slot;
-
-    // Find command slot
-    slot = find_cmd_slot(dev);
-    if(slot < 0)
-    {
-        return -EBUSY;
-    }
-
-    clb = dev->clb + slot;
-    ctb = dev->ctb + slot;
-
-    // Construct FIS
-    fis = (void*)ctb->cfis;
-    fis->type = FIS_TYPE_REG_H2D;
-    fis->pmport = 0;
-    fis->rsv0 = 0;
-    fis->c = 1;
-    fis->command = (dev->atapi ? ATA_CMD_IDENTIFY_PACKET : ATA_CMD_IDENTIFY);
-    fis->feature0 = 0;
-    fis->lba0 = 0;
-    fis->device = 0;
-    fis->lba1 = 0;
-    fis->feature1 = 0;
-    fis->count = 0;
-    fis->icc = 0;
-    fis->control = 0;
-    fis->rsv1 = 0;
-
-    // Add command to list
-    clb->cfl = sizeof(*fis)/sizeof(uint32_t);
-    clb->write = 0;
-    clb->prdtl = 1;
-
-    ctb->prdt->dba = dev->dma.phys;
-    ctb->prdt->dbc = 511;
-    ctb->prdt->ioc = 1;
-
-    // Interrupt type
-    dev->irq.flag = 0;
-    dev->irq.type = PxIS_PSS;
-    dev->irq.signal = 0;
-
-    // Issue command
-    dev->port->ci |= (1 << slot);
-
-    // Wait for interrupt
-    while(dev->irq.flag == 0);
-    if(dev->irq.status & PxIS_TFES)
-    {
-        kp_info( "ahci", "TFES flag set");
-        return -EIO;
-    }
-
-    // Decode identify
-    libata_identify((uint16_t*)dev->dma.virt, &info);
-    libata_print(&info, "ahci", bus_id, dev->id);
-    dev->disk = info;
-
-    return 0;
-}
-
-static int ahci_rw_dma(ahci_dev_t *dev, int rw, uint64_t lba, uint32_t count)
-{
-    fis_reg_h2d_t *fis;
-    hba_chdr_t *clb;
-    hba_ctbl_t *ctb;
-    uint8_t slot;
-
-    // Find command slot
-    slot = find_cmd_slot(dev);
-    if(slot < 0)
-    {
-        return -EBUSY;
-    }
-
-    clb = dev->clb + slot;
-    ctb = dev->ctb + slot;
-
-    // Construct FIS
-    fis = (void*)ctb->cfis;
-    fis->type = FIS_TYPE_REG_H2D;
-    fis->pmport = 0;
-    fis->rsv0 = 0;
-    fis->c = 1;
-    fis->command = ATA_CMD_READ_DMA_EXT;
-    fis->feature0 = 0;
-    fis->lba0 = (lba & 0xFFFFFFFF);
-    fis->device = (1 << 6);
-    fis->lba1 = ((lba >> 32) & 0xFFFF);
-    fis->feature1 = 0;
-    fis->count = count;
-    fis->icc = 0;
-    fis->control = 0;
-    fis->rsv1 = 0;
-
-    // Add command to list
-    clb->cfl = sizeof(*fis) / 4;
-    clb->write = 0;
-    clb->prdtl = 1;
-
-    ctb->prdt->dba = dev->dma.phys;
-    ctb->prdt->dbc = (count * 512) - 1;
-    ctb->prdt->ioc = 1;
-
-    // Interrupt type
-    dev->irq.flag = 0;
-    dev->irq.type = PxIS_DHRS;
-    dev->irq.signal = 1;
-
-    // Issue command
-    dev->port->ci |= (1 << slot);
-
-    // Wait for interrupt
-    thread_wait();
-    if(dev->irq.status & PxIS_TFES)
-    {
-        kp_info( "ahci", "TFES flag set");
-        return -EIO;
-    }
-
-    return 0;
-}
-
-static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
-{
-    int status;
-    ahci_dev_t *dev;
-
-    dev = dp;
-    status = ahci_rw_dma(dev, 0, lba, count);
-    memcpy(buf, (void*)dev->dma.virt, count*512);
-
-    return status;
-}
-
-static int ahci_read(file_t *file, size_t size, void *buf)
-{
-    ahci_dev_t *dev;
-    int status;
-// TODO: need to decide if we are working in bytes or blocks for block devices (size and seek)
-    dev = file->data;
-    status = libata_queue(&dev->wk, dev, 0, file->seek, size, buf);
-
-    return status;
-}
-
 static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
 {
     uint64_t virt, phys;
@@ -337,6 +498,20 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     if(status < 0)
     {
         return status;
+    }
+
+    // ATAPI checks (might need a separate function)
+    if(dev->atapi)
+    {
+        status = ahci_atapi_test_unit_ready(dev);
+        if(!status)
+        {
+            status = ahci_atapi_request_sense(dev);
+            if(!status)
+            {
+                ahci_atapi_read_capacity(dev);
+            }
+        }
     }
 
     // Setup worker thread

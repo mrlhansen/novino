@@ -143,15 +143,15 @@ typedef volatile struct {
 } __attribute__((packed)) hba_mem_t;
 
 typedef volatile struct {
-    uint8_t cfl : 5;   // Command FIS length in units of 4 bytes (2 - 16)
+    uint8_t cfl   : 5; // Command FIS length in units of 4 bytes (2 - 16)
     uint8_t atapi : 1; // ATAPI
     uint8_t write : 1; // Write (1 = H2D, 0 = D2H)
-    uint8_t pf : 1;    // Prefetchable
+    uint8_t pf    : 1; // Prefetchable
     uint8_t reset : 1; // Reset
-    uint8_t bist : 1;  // BIST
+    uint8_t bist  : 1; // BIST
     uint8_t clear : 1; // Clear busy upon R_OK
-    uint8_t rsv0 : 1;  // Reserved
-    uint8_t pmp : 4;   // Port multiplier port
+    uint8_t rsv0  : 1; // Reserved
+    uint8_t pmp   : 4; // Port multiplier port
     uint16_t prdtl;    // Physical region descriptor table length in entries
     uint32_t prdbc;    // Physical region descriptor count transferred
     uint64_t ctba;     // Command table descriptor base address (128 bytes aligned)
@@ -174,21 +174,38 @@ typedef struct {
 } __attribute__((packed)) hba_ctbl_t;
 
 typedef struct {
-    uint8_t type;       // FIS_TYPE_REG_H2D
-    uint8_t pmport : 4; // Port multiplier
-    uint8_t rsv0 : 3;   // Reserved
-    uint8_t c : 1;      // 1: Command, 0: Control
-    uint8_t command;    // Command register
-    uint8_t feature0;   // Feature register low
-    uint32_t lba0 : 24; // LBA register low
-    uint8_t device;     // Device register
-    uint32_t lba1 : 24; // LBA register high
-    uint8_t feature1;   // Feature register high
-    uint16_t count;     // Count register
-    uint8_t icc;        // Isochronous command completion
-    uint8_t control;    // Control register
-    uint32_t rsv1;      // Reserved
+    uint8_t  type;       // FIS_TYPE_REG_H2D
+    uint8_t  pmport : 4; // Port multiplier
+    uint8_t  rsv0   : 3; // Reserved
+    uint8_t  c      : 1; // 1: Command, 0: Control
+    uint8_t  command;    // Command register
+    uint8_t  feature0;   // Feature register low
+    uint32_t lba0 : 24;  // LBA register low
+    uint8_t  device;     // Device register
+    uint32_t lba1 : 24;  // LBA register high
+    uint8_t  feature1;   // Feature register high
+    uint16_t count;      // Count register
+    uint8_t  icc;        // Isochronous command completion
+    uint8_t  control;    // Control register
+    uint32_t rsv1;       // Reserved
 } __attribute__((packed)) fis_reg_h2d_t;
+
+typedef struct {
+    uint8_t  type;
+    uint8_t  command;
+    uint8_t  features;
+    uint8_t  device;
+    uint64_t lba;
+    uint32_t count;
+    uint8_t  atapi;
+    uint8_t  packet[16];
+} ahci_fis_t;
+
+typedef struct {
+    uint64_t phys;
+    uint32_t size;
+    uint8_t  ioc;
+} ahci_prd_t;
 
 typedef struct ahci_dev ahci_dev_t;
 typedef struct ahci_host ahci_host_t;

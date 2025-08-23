@@ -1,8 +1,8 @@
-#include <kernel/vfs/devfs.h>
 #include <kernel/vfs/vfs.h>
-#include <kernel/vfs/fd.h>
-#include <kernel/mem/heap.h>
+#include <kernel/vfs/devfs.h>
+#include <kernel/vfs/iso9660.h>
 #include <kernel/sched/process.h>
+#include <kernel/mem/heap.h>
 #include <kernel/cleanup.h>
 #include <kernel/debug.h>
 #include <kernel/errno.h>
@@ -1016,5 +1016,6 @@ void vfs_init()
     }
 
     devfs_init();
+    iso9660_init();
     vfs_mount(0, "devfs", "devices");
 }

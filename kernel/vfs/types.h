@@ -114,7 +114,7 @@ typedef struct vfs_ops {
     int (*close)(file_t*);
     int (*read)(file_t*, size_t, void*);
     int (*write)(file_t*, size_t, void*);
-    int (*seek)(file_t*, long, int); // define off_t ?
+    int (*seek)(file_t*, ssize_t, int);
     int (*ioctl)(file_t*, size_t, size_t);
     int (*readdir)(file_t*, size_t, void*);
     int (*lookup)(inode_t*, const char*, inode_t*);
@@ -128,7 +128,7 @@ typedef struct devfs_ops {
     int (*close)(file_t*);
     int (*read)(file_t*, size_t, void*);
     int (*write)(file_t*, size_t, void*);
-    int (*seek)(file_t*, long, int); // define off_t ?
+    int (*seek)(file_t*, ssize_t, int);
     int (*ioctl)(file_t*, size_t, size_t);
 };
 

@@ -94,7 +94,7 @@ static int initrd_read(file_t *file, size_t size, void *buf)
     return size;
 }
 
-static int initrd_seek(file_t *file, long offset, int origin)
+static int initrd_seek(file_t *file, ssize_t offset, int origin)
 {
     ustar_t *tar;
     size_t fsz;

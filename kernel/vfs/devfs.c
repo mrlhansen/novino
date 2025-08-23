@@ -235,7 +235,7 @@ static int devfs_write(file_t *file, size_t size, void *buf)
     return ops->write(file, size, buf);
 }
 
-static int devfs_seek(file_t *file, long offset, int origin)
+static int devfs_seek(file_t *file, ssize_t offset, int origin)
 {
     devfs_ops_t *ops;
     devfs_t *entry;
