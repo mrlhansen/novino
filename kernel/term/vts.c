@@ -130,6 +130,6 @@ void vts_init()
         }
 
         sprintf(name, "vts%d", i);
-        devfs_register(0, name, &ops, &vts[i], I_STREAM, 0);
+        devfs_stream_register(0, name, &ops, &vts[i], 0);
     }
 }

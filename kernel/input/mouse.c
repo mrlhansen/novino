@@ -11,5 +11,5 @@ void input_mouse_init()
         .seek = 0,
         .ioctl = 0,
     };
-    devfs_register(0, "mouse", &ops, 0, I_STREAM, 0);
+    devfs_stream_register(0, "mouse", &ops, 0, 0);
 }

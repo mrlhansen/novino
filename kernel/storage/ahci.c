@@ -131,6 +131,7 @@ static int ahci_submit_command(ahci_dev_t *dev, ahci_fis_t *fis, ahci_prd_t *prd
         ctb->prdt[i].ioc = prd->ioc;
     }
 
+    dev->irq.flag = 0;
     dev->port->ci |= (1 << slot);
 
     return 0;
@@ -196,10 +197,6 @@ static int ahci_identify_device(ahci_dev_t *dev)
     prd.size = 512;
     prd.ioc = 1;
 
-    dev->irq.flag = 0; // clear this when submitting command?
-    dev->irq.type = PxIS_PSS;
-    dev->irq.signal = 0;
-
     status = ahci_submit_command(dev, &fis, &prd, 1, 0);
     if(status < 0)
     {
@@ -218,7 +215,7 @@ static int ahci_identify_device(ahci_dev_t *dev)
     return 0;
 }
 
-static int ahci_atapi_packet(ahci_dev_t *dev, uint8_t *packet, int size)
+static int ahci_atapi_packet(ahci_dev_t *dev, uint8_t *packet, int size, int poll)
 {
     ahci_fis_t fis;
     ahci_prd_t prd;
@@ -248,14 +245,15 @@ static int ahci_atapi_packet(ahci_dev_t *dev, uint8_t *packet, int size)
         fis.packet[i] = packet[i];
     }
 
-    dev->irq.flag = 0;
-    dev->irq.type = PxIS_DHRS;
-    dev->irq.signal = 0;
-
     status = ahci_submit_command(dev, &fis, &prd, numprd, 0);
     if(status < 0)
     {
         return status;
+    }
+
+    if(!poll)
+    {
+        return 0;
     }
 
     status = ahci_poll_event(dev, PxIS_DHRS);
@@ -274,7 +272,7 @@ static int ahci_atapi_read_capacity(ahci_dev_t *dev)
     uint8_t *data;
 
     packet[0] = ATAPI_CMD_READ_CAPACITY;
-    status = ahci_atapi_packet(dev, packet, 8);
+    status = ahci_atapi_packet(dev, packet, 8, 1);
     if(status < 0)
     {
         return status;
@@ -308,7 +306,7 @@ static int ahci_atapi_request_sense(ahci_dev_t *dev)
 
     packet[0] = ATAPI_REQUEST_SENSE;
     packet[4] = 18;
-    status = ahci_atapi_packet(dev, packet, 18);
+    status = ahci_atapi_packet(dev, packet, 18, 1);
     if(status < 0)
     {
         return status;
@@ -332,17 +330,41 @@ static int ahci_atapi_test_unit_ready(ahci_dev_t *dev)
     int status;
 
     packet[0] = ATAPI_TEST_UNIT_READY;
-    status = ahci_atapi_packet(dev, packet, 0);
+    status = ahci_atapi_packet(dev, packet, 0, 1);
     if(status < 0)
     {
         return status;
     }
 
-    status = ahci_poll_event(dev, PxIS_DHRS);
+    return 0;
+}
+
+static int ahci_atapi_read_dma(ahci_dev_t *dev, uint64_t lba, uint32_t count)
+{
+    uint8_t packet[16] = {0};
+    int status;
+
+    packet[0] = ATAPI_CMD_READ;
+    packet[2] = ((lba >> 24) & 0xFF);
+    packet[3] = ((lba >> 16) & 0xFF);
+    packet[4] = ((lba >> 8) & 0xFF);
+    packet[5] = ((lba >> 0) & 0xFF);
+    packet[6] = ((count >> 24) & 0xFF);
+    packet[7] = ((count >> 16) & 0xFF);
+    packet[8] = ((count >> 8) & 0xFF);
+    packet[9] = ((count >> 0) & 0xFF);
+
+    dev->irq.type = PxIS_DHRS;
+    dev->irq.signal = 1;
+
+    status = ahci_atapi_packet(dev, packet, 2048 * count, 0);
     if(status < 0)
     {
         return status;
     }
+
+    thread_wait();
+    // PxIS_TFES set?
 
     return 0;
 }
@@ -365,7 +387,6 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
     prd.size = 512 * count;
     prd.ioc = 1;
 
-    dev->irq.flag = 0; // clear this when submitting command?
     dev->irq.type = PxIS_DHRS;
     dev->irq.signal = 1;
 
@@ -383,25 +404,31 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
 
 static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
 {
+    ahci_dev_t *dev = dp;
     int status;
-    ahci_dev_t *dev;
 
-    dev = dp;
-    status = ahci_rw_dma(dev, 0, lba, count);
-    memcpy(buf, (void*)dev->dma.virt, count*512);
+    if(dev->atapi)
+    {
+        status = ahci_atapi_read_dma(dev, lba, count);
+    }
+    else
+    {
+        status = ahci_rw_dma(dev, 0, lba, count);
+    }
 
-    return status;
+    if(status < 0)
+    {
+        return status;
+    }
+
+    memcpy(buf, (void*)dev->dma.virt, dev->disk.bps * count);
+    return 0;
 }
 
-static int ahci_read(file_t *file, size_t size, void *buf)
+static int ahci_read(void *data, size_t lba, size_t count, void *buf)
 {
-    ahci_dev_t *dev;
-    int status;
-// TODO: need to decide if we are working in bytes or blocks for block devices (size and seek)
-    dev = file->data;
-    status = libata_queue(&dev->wk, dev, 0, file->seek, size, buf);
-
-    return status;
+    ahci_dev_t *dev = data;
+    return libata_queue(&dev->wk, dev, 0, lba, count, buf);
 }
 
 static int ahci_rebase(ahci_dev_t *dev)
@@ -522,22 +549,19 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     libata_start_worker(&dev->wk, name);
 
     // Register disk
-    static devfs_ops_t ops = {
-        .open = 0,
-        .close = 0,
+    static devfs_blk_t ops = {
         .read = ahci_read,
-        .seek = 0,
-        .ioctl = 0
+        .write = 0,
     };
 
-    stat_t stat = {
-        .size = dev->disk.bps * dev->disk.sectors,
-        .blksz = dev->disk.bps,
-        .blocks = dev->disk.sectors
+    devfs_gd_t gd = {
+        .bps = dev->disk.bps,
+        .sectors = dev->disk.sectors,
+        .offset = 0,
     };
 
     sprintf(name, "disk%d", dev->id);
-    entry = devfs_register(parent, name, &ops, dev, I_BLOCK, &stat);
+    entry = devfs_block_register(parent, name, &ops, &gd, dev, 0);
 
     if(dev->atapi == 0)
     {

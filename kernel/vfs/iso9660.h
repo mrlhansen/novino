@@ -23,7 +23,7 @@ typedef struct {
     uint8_t tz_offset;
 } iso9660_time;
 
-// Primary volume descriptor
+// Primary (and supplementary) volume descriptor
 typedef struct {
     uint8_t type;
     char id_standard[5];
@@ -55,14 +55,15 @@ typedef struct {
     iso9660_time dt_expiration;
     iso9660_time dt_effective;
     uint8_t file_structure_version;
+    char padding[1166];
 } __attribute__((packed)) iso9660_pvd_t;
 
 // Directory entry
 typedef struct {
     uint8_t length;
     uint8_t xattr_length;
-    uint64_t extent;
-    uint64_t data_length;
+    uint64_t extent; // LBA address
+    uint64_t extent_size;
     struct {
         uint8_t year;
         uint8_t month;
@@ -76,7 +77,7 @@ typedef struct {
     uint8_t file_unit_size;
     uint8_t gap_size;
     uint32_t volume_sequence_number;
-    uint8_t length_of_filename;
+    uint8_t filename_length;
     char filename[256];
 } __attribute__((packed)) iso9660_dirent_t;
 
@@ -84,8 +85,8 @@ typedef struct {
 typedef struct {
     uint32_t root_location;
     uint32_t root_length;
-    uint32_t bytes_per_sector;
-    uint32_t total_sectors;
+    uint32_t bps;
+    uint32_t sectors;
     uint8_t  joliet_level;
     devfs_t *dev;
 } iso9660_t;

@@ -33,9 +33,7 @@ enum {
 #define SEEK_END 2 // Seek relative to end
 
 // Type definitions
-typedef struct devfs_ops devfs_ops_t;
 typedef struct devfs devfs_t;
-typedef struct vfs_ops vfs_ops_t;
 typedef struct vfs_fs vfs_fs_t;
 typedef struct vfs_mp vfs_mp_t;
 typedef struct inode inode_t;
@@ -109,7 +107,7 @@ typedef struct file {
 
 // Filesystem operations
 // TODO: all of these should have another return type
-typedef struct vfs_ops {
+typedef struct {
     int (*open)(file_t*);
     int (*close)(file_t*);
     int (*read)(file_t*, size_t, void*);
@@ -120,17 +118,30 @@ typedef struct vfs_ops {
     int (*lookup)(inode_t*, const char*, inode_t*);
     void* (*mount)(devfs_t*, inode_t*);
     int (*umount)(void*);
-};
+} vfs_ops_t;
 
-// Device operations
-typedef struct devfs_ops {
+// Stream device operations
+typedef struct {
     int (*open)(file_t*);
     int (*close)(file_t*);
     int (*read)(file_t*, size_t, void*);
     int (*write)(file_t*, size_t, void*);
     int (*seek)(file_t*, ssize_t, int);
     int (*ioctl)(file_t*, size_t, size_t);
-};
+} devfs_ops_t;
+
+// Block device operations
+typedef struct {
+    int (*read)(void*, size_t, size_t, void*);
+    int (*write)(void*, size_t, size_t, void*);
+} devfs_blk_t;
+
+// Block device geometry descriptor
+typedef struct {
+    size_t bps;
+    size_t sectors;
+    size_t offset;
+} devfs_gd_t;
 
 // Filesystem
 struct vfs_fs {
@@ -152,12 +163,16 @@ struct vfs_mp {
 
 // Device file
 typedef struct devfs {
-    char name[MAX_SFN]; // Name of device
-    inode_t inode;      // Device inode
-    devfs_ops_t *ops;   // Operations
-    void *data;         // Private device data
-    devfs_t *next;      // Link to next
-    devfs_t *child;     // Link to children
+    char name[MAX_SFN];    // Name of device
+    inode_t inode;         // Device inode
+    union {
+        devfs_ops_t *ops;  // Stream operations
+        devfs_blk_t *blk;  // Block operations
+    };
+    devfs_gd_t gd;         // Geometry descriptor
+    void *data;            // Private device data
+    devfs_t *next;         // Link to next
+    devfs_t *child;        // Link to children
 };
 
 // Internal struct for VFS path iteration

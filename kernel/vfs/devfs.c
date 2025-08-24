@@ -68,15 +68,10 @@ static devfs_t *devfs_find(devfs_t *parent, const char *name)
     return 0;
 }
 
-devfs_t *devfs_register(devfs_t *parent, const char *name, devfs_ops_t *ops, void *data, int flags, stat_t *stat)
+static devfs_t *devfs_register(devfs_t *parent, const char *name, int flags, stat_t *stat)
 {
-    devfs_t *entry;
+    devfs_t *dev;
     inode_t *inode;
-
-    if(flags != I_STREAM && flags != I_BLOCK)
-    {
-        return 0;
-    }
 
     if(parent == 0)
     {
@@ -93,15 +88,15 @@ devfs_t *devfs_register(devfs_t *parent, const char *name, devfs_ops_t *ops, voi
         return 0;
     }
 
-    entry = devfs_alloc(name, flags);
-    if(entry == 0)
+    dev = devfs_alloc(name, flags);
+    if(dev == 0)
     {
         return 0;
     }
 
     if(stat)
     {
-        inode = &entry->inode;
+        inode = &dev->inode;
         if(stat->mode)
         {
             inode->mode = stat->mode;
@@ -128,20 +123,52 @@ devfs_t *devfs_register(devfs_t *parent, const char *name, devfs_ops_t *ops, voi
         }
     }
 
-    entry->data = data;
-    entry->ops = ops;
-    entry->child = 0;
-    entry->next = 0;
+    dev->next = parent->child;
+    parent->child = dev;
 
-    entry->next = parent->child;
-    parent->child = entry;
+    return dev;
+}
 
-    return entry;
+devfs_t *devfs_stream_register(devfs_t *parent, const char *name, devfs_ops_t *ops, void *data, stat_t *stat)
+{
+    devfs_t *dev;
+
+    dev = devfs_register(parent, name, I_STREAM, stat);
+    if(dev == 0)
+    {
+        return 0;
+    }
+
+    dev->data = data;
+    dev->ops = ops;
+
+    return dev;
+}
+
+devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *ops, devfs_gd_t *gd, void *data, stat_t *stat)
+{
+    devfs_t *dev;
+
+    dev = devfs_register(parent, name, I_BLOCK, stat);
+    if(dev == 0)
+    {
+        return 0;
+    }
+
+    dev->data = data;
+    dev->blk = ops;
+    dev->gd = *gd;
+
+    dev->inode.blksz = gd->bps;
+    dev->inode.blocks = gd->sectors;
+    dev->inode.size = gd->bps * gd->sectors;
+
+    return dev;
 }
 
 devfs_t *devfs_mkdir(devfs_t *parent, const char *name)
 {
-    devfs_t *entry;
+    devfs_t *dev;
 
     if(parent == 0)
     {
@@ -158,29 +185,34 @@ devfs_t *devfs_mkdir(devfs_t *parent, const char *name)
         return 0;
     }
 
-    entry = devfs_alloc(name, I_DIR);
-    if(entry == 0)
+    dev = devfs_alloc(name, I_DIR);
+    if(dev == 0)
     {
         return 0;
     }
 
-    entry->next = parent->child;
-    parent->child = entry;
+    dev->next = parent->child;
+    parent->child = dev;
 
-    return entry;
+    return dev;
 }
 
 static int devfs_open(file_t *file)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops && ops->open)
     {
-        file->data = entry->data;
+        file->data = dev->data;
         return ops->open(file);
     }
 
@@ -190,10 +222,15 @@ static int devfs_open(file_t *file)
 static int devfs_close(file_t *file)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops && ops->close)
     {
@@ -206,10 +243,15 @@ static int devfs_close(file_t *file)
 static int devfs_read(file_t *file, size_t size, void *buf)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops->read == 0)
     {
@@ -222,10 +264,15 @@ static int devfs_read(file_t *file, size_t size, void *buf)
 static int devfs_write(file_t *file, size_t size, void *buf)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops->write == 0)
     {
@@ -238,10 +285,15 @@ static int devfs_write(file_t *file, size_t size, void *buf)
 static int devfs_seek(file_t *file, ssize_t offset, int origin)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops->seek == 0)
     {
@@ -254,10 +306,15 @@ static int devfs_seek(file_t *file, ssize_t offset, int origin)
 static int devfs_ioctl(file_t *file, size_t cmd, size_t val)
 {
     devfs_ops_t *ops;
-    devfs_t *entry;
+    devfs_t *dev;
 
-    entry = file->inode->obj;
-    ops = entry->ops;
+    dev = file->inode->obj;
+    ops = dev->ops;
+
+    if(dev->inode.flags == I_BLOCK)
+    {
+        return -ENOTSUP; // must be implemented
+    }
 
     if(ops->ioctl == 0)
     {
@@ -269,13 +326,13 @@ static int devfs_ioctl(file_t *file, size_t cmd, size_t val)
 
 static int devfs_readdir(file_t *file, size_t seek, void *data)
 {
-    devfs_t *parent, *curr;
+    devfs_t *parent, *dev;
     int status;
 
     parent = file->inode->obj;
-    curr = parent->child;
+    dev = parent->child;
 
-    while(curr)
+    while(dev)
     {
         if(seek)
         {
@@ -283,13 +340,13 @@ static int devfs_readdir(file_t *file, size_t seek, void *data)
         }
         else
         {
-            status = vfs_put_dirent(data, curr->name, &curr->inode);
+            status = vfs_put_dirent(data, dev->name, &dev->inode);
             if(status < 0)
             {
                 break;
             }
         }
-        curr = curr->next;
+        dev = dev->next;
     }
 
     return 0;
@@ -297,16 +354,16 @@ static int devfs_readdir(file_t *file, size_t seek, void *data)
 
 static int devfs_lookup(inode_t *ip, const char *name, inode_t *inode)
 {
-    devfs_t *parent, *entry;
+    devfs_t *parent, *dev;
 
     parent = ip->obj;
-    entry = devfs_find(parent, name);
-    if(entry == 0)
+    dev = devfs_find(parent, name);
+    if(dev == 0)
     {
         return -ENOENT;
     }
 
-    *inode = entry->inode;
+    *inode = dev->inode;
     return 0;
 }
 

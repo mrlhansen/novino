@@ -139,8 +139,8 @@ void libata_print(ata_info_t *info, const char *name, int bus_id, int dev_id)
     size = (info->sectors * info->bps);
     sprintf(buf, "disk%d.%d", bus_id, dev_id);
 
-    kp_info( name, "%s: %s drive (revision %d)", buf, (info->atapi ? "ATAPI" : "ATA"), info->revision);
-    kp_info( name, "%s: %s, %s, %s", buf, info->model, info->serial, info->firmware);
+    kp_info(name, "%s: %s drive (revision %d)", buf, (info->atapi ? "ATAPI" : "ATA"), info->revision);
+    kp_info(name, "%s: %s, %s, %s", buf, info->model, info->serial, info->firmware);
 
     if(size == 0)
     {
@@ -158,7 +158,7 @@ void libata_print(ata_info_t *info, const char *name, int bus_id, int dev_id)
         suffix = "MiB";
     }
 
-    kp_info( name, "%s: %lu sectors, %lu %s", buf, info->sectors, size, suffix);
+    kp_info(name, "%s: %lu sectors, %lu %s", buf, info->sectors, size, suffix);
 }
 
 static void libata_worker(ata_worker_t *wk)
@@ -207,6 +207,7 @@ int libata_queue(ata_worker_t *wk, void *dev, int write, uint64_t lba, uint32_t 
 
     // Append item to queue
     list_append(&wk->queue, &item);
+    thread_unblock(wk->thread);
 
     // Wait until complete
     thread_block(0);
