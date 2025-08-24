@@ -11,6 +11,29 @@ enum {
     ISO9660_VTD = 255, // Volume Terminate Descriptor
 };
 
+typedef union {
+    struct {
+        uint16_t type;
+        uint8_t length;
+    };
+    struct {
+        uint16_t type;
+        uint8_t length;
+        uint8_t version;
+        uint64_t mode; // LSB-MSB encoding
+        uint64_t links;// LSB-MSB encoding
+        uint64_t uid;// LSB-MSB encoding
+        uint64_t gid;// LSB-MSB encoding
+    } __attribute__((packed)) px;
+    struct {
+        uint16_t type;
+        uint8_t length;
+        uint8_t version;
+        uint8_t flags;
+        char name[];
+    } __attribute__((packed)) nm;
+} iso9660_susp_t;
+
 // Datetime format used in volume descriptor
 typedef struct {
     char year[4];
@@ -21,7 +44,7 @@ typedef struct {
     char seconds[2];
     char hecoseconds[2];
     uint8_t tz_offset;
-} iso9660_time;
+} __attribute__((packed)) iso9660_time;
 
 // Primary (and supplementary) volume descriptor
 typedef struct {
