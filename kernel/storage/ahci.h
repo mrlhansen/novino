@@ -74,6 +74,12 @@ enum {
     PxIS_CPDS = (1 << 31), // Cold Port Detect Status
 };
 
+enum {
+    PxTFD_ERR = (1 << 0), // Error
+    PxTFD_DRQ = (1 << 2), // Data transfer requested
+    PxTFD_BSY = (1 << 7), // Interface is busy
+};
+
 typedef struct {
     uint32_t np    : 5;  // Number of ports
     uint32_t sxs   : 1;  // Supports external SATA

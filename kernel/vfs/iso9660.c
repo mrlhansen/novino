@@ -6,23 +6,32 @@
 #include <string.h>
 #include <ctype.h>
 
+static inline int iso9660_read_sectors(devfs_t *dev, size_t lba, size_t count, void *buf)
+{
+    return dev->blk->read(dev->data, lba, count, buf);
+}
+
 static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *inode, int joliet)
 {
     iso9660_susp_t *ent;
     int susp, size;
 
-    size = dirent->filename_length;
-    filename[size] = '\0';
-
     if(joliet)
     {
+        size = dirent->filename_length / 2;
+        filename[size] = '\0';
+
         for(int i = 0; i < size; i++)
         {
-            filename[i] = dirent->filename[2*i];
+            // assume that filenames are pure ascii
+            filename[i] = dirent->filename[2*i+1];
         }
     }
     else
     {
+        size = dirent->filename_length;
+        filename[size] = '\0';
+
         for(int i = 0; i < size; i++)
         {
             if(dirent->filename[i] == ';')
@@ -37,9 +46,9 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
         }
     }
 
-    inode->size = (dirent->extent_size & 0xFFFFFFFF);
-    inode->ino = (dirent->extent & 0xFFFFFFFF);
-    inode->blocks = (inode->size + 2047) / 2048;
+    memset(inode, 0, sizeof(*inode));
+    inode->size = dirent->extent_size;
+    inode->ino = dirent->extent;
 
     if(dirent->flags & 0x02)
     {
@@ -81,8 +90,8 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
                 inode->flags = I_SYMLINK;
             }
 
-            inode->uid = (ent->px.uid & 0xFFFFFFFF);
-            inode->gid = (ent->px.gid & 0xFFFFFFFF);
+            inode->uid = ent->px.uid;
+            inode->gid = ent->px.gid;
         }
         else if(ent->type == 0x4D4E) // NM
         {
@@ -97,6 +106,11 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
             }
             filename[size] = '\0';
         }
+
+        if(ent->length == 0)
+        {
+            break;
+        }
     }
 
 }
@@ -106,19 +120,19 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
     iso9660_dirent_t *dirent;
     iso9660_t *fs;
     inode_t inode;
-    int offset = 0;
     char filename[256];
     void *buf;
-    int status;
+    int offset, status;
     int ns, cs;
 
     fs = ip->data;
     ns = ip->blocks;
     cs = 0;
+    offset = 0;
 
     buf = kmalloc(ip->size); // do not allocate
 
-    status = fs->dev->blk->read(fs->dev->data, ip->ino, ip->blocks, buf); // make separate read function
+    status = iso9660_read_sectors(fs->dev, ip->ino, ip->blocks, buf);
     if(status < 0)
     {
         return status;
@@ -131,7 +145,8 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
 
         if(dirent->length == 0)
         {
-            offset = 2048 * cs++;
+            cs++;
+            offset = fs->bps * cs;
             continue;
         }
 
@@ -156,6 +171,8 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
         }
 
         iso9660_dirent(dirent, filename, &inode, fs->joliet_level);
+        inode.blksz = fs->bps;
+        inode.blocks = (inode.size + fs->bps - 1) / fs->bps;
 
         if(data)
         {
@@ -182,7 +199,85 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
 
 static int iso9660_read(file_t *file, size_t size, void *buf)
 {
-    return -1;
+    iso9660_t *fs;
+    size_t fsize, fstart, esize;
+    size_t offset, whole;
+    void *blkbuf;
+    int status;
+
+    fs = file->inode->data;
+
+    // (offset, whole) are in units of sectors
+    // (fsize, fstart, esize) are in units of bytes
+
+    if((file->seek + size) > file->inode->size)
+    {
+        size = file->inode->size - file->seek;
+    }
+
+    if(!size)
+    {
+        return 0;
+    }
+
+    offset = (file->seek / fs->bps) + file->inode->ino;
+    fstart = (file->seek % fs->bps);
+
+    if(fstart)
+    {
+        fsize = (fs->bps - fstart);
+        if(size < fsize)
+        {
+            fsize = size;
+        }
+    }
+    else
+    {
+        fsize = 0;
+    }
+
+    whole = (size - fsize) / fs->bps;
+    esize = (size - fsize) % fs->bps;
+
+    blkbuf = kmalloc(fs->bps); // remove
+
+    if(fsize)
+    {
+        status = iso9660_read_sectors(fs->dev, offset, 1, blkbuf);
+        if(status < 0)
+        {
+            return status;
+        }
+        memcpy(buf, blkbuf + fstart, fsize);
+        buf += fsize;
+        offset++;
+    }
+
+    if(whole)
+    {
+        status = iso9660_read_sectors(fs->dev, offset, whole, buf);
+        if(status < 0)
+        {
+            return status;
+        }
+        buf += whole * fs->bps;
+        offset += whole;
+    }
+
+    if(esize)
+    {
+        status = iso9660_read_sectors(fs->dev, offset, 1, blkbuf);
+        if(status < 0)
+        {
+            return status;
+        }
+        memcpy(buf, blkbuf, esize);
+    }
+
+    kfree(blkbuf); // remove
+
+    file->seek += size;
+    return size;
 }
 
 static int iso9660_seek(file_t *file, ssize_t offset, int origin)
@@ -246,7 +341,7 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
     kp_info("iso", "trying to mount iso9660");
 
     pvd = kzalloc(8192); // should not be allocated?
-    status = dev->blk->read(dev->data, 16, 4, pvd);
+    status = iso9660_read_sectors(dev, 16, 4, pvd);
     if(status < 0)
     {
         return 0;
@@ -272,10 +367,10 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
 
         if(pvd->type == ISO9660_PVD)
         {
-            fs->bps = (pvd->logical_block_size & 0xFFFF);
-            fs->sectors = (pvd->space_size & 0xFFFFFFFF);
-            fs->root_location = (root->extent & 0xFFFFFFFF);
-            fs->root_length = (root->extent_size & 0xFFFFFFFF);
+            fs->bps = pvd->logical_block_size;
+            fs->sectors = pvd->space_size;
+            fs->root_extent = root->extent;
+            fs->root_size = root->extent_size;
         }
         else if(pvd->type == ISO9660_SVD)
         {
@@ -283,21 +378,21 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
             {
                 switch(pvd->escape_sequence[2])
                 {
-                case 0x40:
-                    fs->joliet_level = 1;
-                    break;
-                case 0x43:
-                    fs->joliet_level = 2;
-                    break;
-                case 0x45:
-                    fs->joliet_level = 3;
-                    break;
-                default:
-                    continue;
-                    break;
+                    case 0x40:
+                        fs->joliet_level = 1; // Sequence: %\@
+                        break;
+                    case 0x43:
+                        fs->joliet_level = 2; // Sequence: %\C
+                        break;
+                    case 0x45:
+                        fs->joliet_level = 3; // Sequence: %\E
+                        break;
+                    default:
+                        continue;
+                        break;
                 }
-                fs->root_location = (root->extent & 0xFFFFFFFF);
-                fs->root_length = (root->extent_size & 0xFFFFFFFF);
+                fs->root_extent = root->extent;
+                fs->root_size = root->extent_size;
             }
         }
         else if(pvd->type == ISO9660_VTD)
@@ -308,13 +403,13 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
         pvd++;
     }
 
-    inode->ino = fs->root_location;
+    inode->ino = fs->root_extent;
     inode->flags = I_DIR;
     inode->gid = 0;
     inode->uid = 0;
     inode->mode = 0555;
-    inode->size = fs->root_length;
-    inode->blocks = fs->root_length / fs->bps;
+    inode->size = fs->root_size;
+    inode->blocks = fs->root_size / fs->bps;
     inode->blksz = fs->bps;
 
     kp_info("iso9660", "joilet level: %d", fs->joliet_level);

@@ -150,7 +150,6 @@ static int ahci_poll_event(ahci_dev_t *dev, int type)
         {
             if(dev->irq.status & PxIS_TFES)
             {
-                kp_info("ahci", "TFES flag set");
                 return -EIO;
             }
             else if(dev->irq.status & type)
@@ -161,8 +160,7 @@ static int ahci_poll_event(ahci_dev_t *dev, int type)
         now = system_timestamp();
     }
 
-    kp_error("ahci", "polling timed out for: %x", type);
-    return -ENOINT;
+    return -ETMOUT;
 }
 
 static void ahci_start_cmd(hba_port_t *port)
@@ -300,25 +298,27 @@ static int ahci_atapi_request_sense(ahci_dev_t *dev)
 {
     uint8_t packet[16] = {0};
     uint8_t *data;
-    int status;
-    int code;
+    int asc;
     int key;
+
+    data = (void*)dev->dma.virt;
+    data[0] = 0;
 
     packet[0] = ATAPI_REQUEST_SENSE;
     packet[4] = 18;
-    status = ahci_atapi_packet(dev, packet, 18, 1);
-    if(status < 0)
+    ahci_atapi_packet(dev, packet, 18, 1);
+
+    if(data[0] == 0)
     {
-        return status;
+        return -EIO;
     }
 
-    data = (void*)dev->dma.virt;
     key = (data[2] & 0x0F);
-    code = data[12];
+    asc = data[12];
 
     if(key)
     {
-        return (code << 12) | key;
+        return (asc << 8) | key;
     }
 
     return 0;
@@ -339,10 +339,52 @@ static int ahci_atapi_test_unit_ready(ahci_dev_t *dev)
     return 0;
 }
 
+static int ahci_atapi_status_check(ahci_dev_t *dev)
+{
+    int status;
+
+    status = ahci_atapi_test_unit_ready(dev);
+    if(!status)
+    {
+        return 0;
+    }
+
+    status = ahci_atapi_request_sense(dev);
+    if(status < 0)
+    {
+        return status;
+    }
+    if(!status)
+    {
+        return 0;
+    }
+
+    kp_debug("ahci", "sense data %#x", status);
+
+    if(status == 0x3A02)
+    {
+        kp_debug("ahci", "MEDIA NOT PRESENT");
+        return -ENOMEDIUM;
+    }
+    else if(status == 0x2806)
+    {
+        kp_debug("ahci", "MEDIA MAY HAVE CHANGED");
+        return -1; // must be acknowledged
+    }
+
+    return 0;
+}
+
 static int ahci_atapi_read_dma(ahci_dev_t *dev, uint64_t lba, uint32_t count)
 {
     uint8_t packet[16] = {0};
     int status;
+
+    status = ahci_atapi_status_check(dev);
+    if(status < 0)
+    {
+        return status;
+    }
 
     packet[0] = ATAPI_CMD_READ;
     packet[2] = ((lba >> 24) & 0xFF);
@@ -518,7 +560,7 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     dev->dma.size = ATA_DMA_SIZE;
 
     // Enable interrupts
-    dev->port->ie = 0x3;
+    dev->port->ie = PxIS_DHRS | PxIS_PSS | PxIS_TFES;
 
     // Identify device
     status = ahci_identify_device(dev);
@@ -621,7 +663,7 @@ void ahci_init_hba(pci_dev_t *pcidev, hba_mem_t *hba)
     // BIOS handoff
     if(cap.boh)
     {
-        kp_info( "ahci", "BIOS handoff not implemented");
+        kp_info("ahci", "BIOS handoff not implemented");
         return;
     }
 
@@ -654,8 +696,8 @@ void ahci_init_hba(pci_dev_t *pcidev, hba_mem_t *hba)
     hba->is = 0xFFFFFFFF;
 
     // Print information
-    kp_info( "ahci", "ahci%d: version: %06x, ports: %d, ncs: %d", bus_id, hba->vs, np, host->ncs);
-    kp_info( "ahci", "ahci%d: flags: %016lx ", bus_id, flags);
+    kp_info("ahci", "ahci%d: version: %06x, ports: %d, ncs: %d", bus_id, hba->vs, np, host->ncs);
+    kp_info("ahci", "ahci%d: flags: %016lx ", bus_id, flags);
 
     // Initialize all devices
     for(int i = 0; i < 32; i++)
