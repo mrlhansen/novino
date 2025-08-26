@@ -208,7 +208,7 @@ static int ahci_identify_device(ahci_dev_t *dev)
     }
 
     libata_identify((uint16_t*)dev->dma.virt, &dev->disk);
-    libata_print(&dev->disk, "ahci", bus_id, dev->id);
+    libata_print(&dev->disk, "ahci", dev->host->bus, dev->id);
 
     return 0;
 }
@@ -288,7 +288,7 @@ static int ahci_atapi_read_capacity(ahci_dev_t *dev)
     bps = (bps << 8) | data[6];
     bps = (bps << 8) | data[7];
 
-    dev->disk.sectors = sectors;
+    dev->disk.sectors = sectors + 1;
     dev->disk.bps = bps;
 
     return 0;
@@ -346,30 +346,45 @@ static int ahci_atapi_status_check(ahci_dev_t *dev)
     status = ahci_atapi_test_unit_ready(dev);
     if(!status)
     {
+        if(dev->status == BLKDEV_MEDIA_CHANGED)
+        {
+            return -EBUSY;
+        }
         return 0;
     }
 
     status = ahci_atapi_request_sense(dev);
-    if(status < 0)
+    if(status < 1)
     {
         return status;
     }
-    if(!status)
-    {
-        return 0;
-    }
-
-    kp_debug("ahci", "sense data %#x", status);
 
     if(status == 0x3A02)
     {
-        kp_debug("ahci", "MEDIA NOT PRESENT");
+        if(dev->status != BLKDEV_MEDIA_ABSENT)
+        {
+            dev->status = BLKDEV_MEDIA_ABSENT;
+            kp_debug("ahci", "ahci%d.%d: medium not present", dev->host->bus, dev->id);
+        }
         return -ENOMEDIUM;
     }
     else if(status == 0x2806)
     {
-        kp_debug("ahci", "MEDIA MAY HAVE CHANGED");
-        return -1; // must be acknowledged
+        if(dev->status != BLKDEV_MEDIA_CHANGED)
+        {
+            dev->status = BLKDEV_MEDIA_CHANGED;
+            kp_debug("ahci", "ahci%d.%d: medium has changed", dev->host->bus, dev->id);
+        }
+        status = ahci_atapi_read_capacity(dev);
+        if(!status)
+        {
+            kp_debug("ahci", "ahci%d.%d: detected capacity %d sectors", dev->host->bus, dev->id, dev->disk.sectors);
+        }
+    }
+
+    if(dev->status == BLKDEV_MEDIA_CHANGED)
+    {
+        return -EBUSY;
     }
 
     return 0;
@@ -471,6 +486,46 @@ static int ahci_read(void *data, size_t lba, size_t count, void *buf)
 {
     ahci_dev_t *dev = data;
     return libata_queue(&dev->wk, dev, 0, lba, count, buf);
+}
+
+static int ahci_status(void *data, blkdev_t *blk, int ack)
+{
+    ahci_dev_t *dev = data;
+    int status = 0;
+
+    blk->bps = dev->disk.bps;
+    blk->sectors = dev->disk.sectors;
+    blk->offset = 0;
+    blk->flags = 0;
+
+    if(!dev->atapi)
+    {
+        return 0;
+    }
+
+    blk->flags = BLKDEV_REMOVEABLE;
+    status = ahci_atapi_status_check(dev);
+
+    if(dev->status == BLKDEV_MEDIA_ABSENT)
+    {
+        blk->bps = 0;
+        blk->sectors = 0;
+        blk->flags |= BLKDEV_MEDIA_ABSENT;
+    }
+    else if(dev->status == BLKDEV_MEDIA_CHANGED)
+    {
+        if(ack)
+        {
+            dev->status = 0;
+            status = 0;
+        }
+        else
+        {
+            blk->flags |= BLKDEV_MEDIA_CHANGED;
+        }
+    }
+
+    return status;
 }
 
 static int ahci_rebase(ahci_dev_t *dev)
@@ -587,23 +642,18 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     dev->irq.signal = 0;
     dev->wk.read = ahci_read_core;
     dev->wk.write = 0;
-    sprintf(name, "ahci%ddisk%d", bus_id, dev->id);
+    sprintf(name, "ahci%d.%d", dev->host->bus, dev->id);
     libata_start_worker(&dev->wk, name);
 
     // Register disk
     static devfs_blk_t ops = {
+        .status = ahci_status,
         .read = ahci_read,
         .write = 0,
     };
 
-    devfs_gd_t gd = {
-        .bps = dev->disk.bps,
-        .sectors = dev->disk.sectors,
-        .offset = 0,
-    };
-
     sprintf(name, "disk%d", dev->id);
-    entry = devfs_block_register(parent, name, &ops, &gd, dev, 0);
+    entry = devfs_block_register(parent, name, &ops, dev, 0);
 
     if(dev->atapi == 0)
     {
@@ -620,7 +670,7 @@ static int ahci_alloc_irq_vectors(pci_dev_t *dev, ahci_host_t *host)
     status = pci_alloc_irq_vectors(dev, 1, 1);
     if(status < 0)
     {
-        kp_error("ahci", "failed to allocated IRQ vectors (status %d)", status);
+        kp_error("ahci", "failed to allocate IRQ vectors (status %d)", status);
         return status;
     }
 
@@ -643,10 +693,6 @@ void ahci_init_hba(pci_dev_t *pcidev, hba_mem_t *hba)
 
     // Increment bus number
     bus_id++;
-
-    // Create folder
-    sprintf(name, "ahci%d", bus_id);
-    parent = devfs_mkdir(0, name);
 
     // AHCI enable
     if((hba->ghc & GHC_AE) == 0)
@@ -685,10 +731,15 @@ void ahci_init_hba(pci_dev_t *pcidev, hba_mem_t *hba)
 
     // Store information
     host->cap = cap;
+    host->bus = bus_id;
     host->np = np;
     host->ncs = cap.ncs + 1;
     host->hba = hba;
     host->dev = dev;
+
+    // Create devfs folder
+    sprintf(name, "ahci%d", host->bus);
+    parent = devfs_mkdir(0, name);
 
     // Enable interrupts
     ahci_alloc_irq_vectors(pcidev, host);
@@ -696,8 +747,8 @@ void ahci_init_hba(pci_dev_t *pcidev, hba_mem_t *hba)
     hba->is = 0xFFFFFFFF;
 
     // Print information
-    kp_info("ahci", "ahci%d: version: %06x, ports: %d, ncs: %d", bus_id, hba->vs, np, host->ncs);
-    kp_info("ahci", "ahci%d: flags: %016lx ", bus_id, flags);
+    kp_info("ahci", "ahci%d: version: %06x, ports: %d, ncs: %d", host->bus, hba->vs, np, host->ncs);
+    kp_info("ahci", "ahci%d: flags: %016lx ", host->bus, flags);
 
     // Initialize all devices
     for(int i = 0; i < 32; i++)

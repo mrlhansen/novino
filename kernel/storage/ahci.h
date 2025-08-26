@@ -196,6 +196,13 @@ typedef struct {
     uint32_t rsv1;       // Reserved
 } __attribute__((packed)) fis_reg_h2d_t;
 
+//
+// Support structures that are not directly defined in the specification
+//
+
+typedef struct ahci_dev ahci_dev_t;
+typedef struct ahci_host ahci_host_t;
+
 typedef struct {
     uint8_t  type;
     uint8_t  command;
@@ -213,14 +220,12 @@ typedef struct {
     uint8_t  ioc;
 } ahci_prd_t;
 
-typedef struct ahci_dev ahci_dev_t;
-typedef struct ahci_host ahci_host_t;
-
 struct ahci_dev {
-    uint8_t id;       // Port ID
-    uint8_t atapi;    // ATAPI drive
-    ata_info_t disk;  // ATA disk information
-    ata_worker_t wk;  // ATA worker
+    uint8_t id;        // Port ID
+    uint8_t atapi;     // ATAPI drive
+    ata_info_t disk;   // ATA disk information
+    ata_worker_t wk;   // ATA worker
+    uint8_t status;    // Status
 
     ahci_host_t *host; // AHCI host
     hba_port_t *port;  // ACHI port
@@ -246,6 +251,7 @@ struct ahci_host {
     cap_t cap;
     uint8_t np;
     uint8_t ncs;
+    uint8_t bus;
     hba_mem_t *hba;
     ahci_dev_t *dev;
 };

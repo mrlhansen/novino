@@ -137,7 +137,7 @@ void libata_print(ata_info_t *info, const char *name, int bus_id, int dev_id)
     char buf[32];
 
     size = (info->sectors * info->bps);
-    sprintf(buf, "disk%d.%d", bus_id, dev_id);
+    sprintf(buf, "%s%d.%d", name, bus_id, dev_id);
 
     kp_info(name, "%s: %s drive (revision %d)", buf, (info->atapi ? "ATAPI" : "ATA"), info->revision);
     kp_info(name, "%s: %s, %s, %s", buf, info->model, info->serial, info->firmware);

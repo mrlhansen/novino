@@ -145,9 +145,15 @@ devfs_t *devfs_stream_register(devfs_t *parent, const char *name, devfs_ops_t *o
     return dev;
 }
 
-devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *ops, devfs_gd_t *gd, void *data, stat_t *stat)
+devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *ops, void *data, stat_t *stat)
 {
     devfs_t *dev;
+    blkdev_t blk;
+
+    if(!ops->status)
+    {
+        return 0;
+    }
 
     dev = devfs_register(parent, name, I_BLOCK, stat);
     if(dev == 0)
@@ -157,11 +163,12 @@ devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *op
 
     dev->data = data;
     dev->blk = ops;
-    dev->gd = *gd;
 
-    dev->inode.blksz = gd->bps;
-    dev->inode.blocks = gd->sectors;
-    dev->inode.size = gd->bps * gd->sectors;
+    ops->status(data, &blk, 1);
+
+    dev->inode.blksz = blk.bps;
+    dev->inode.blocks = blk.sectors;
+    dev->inode.size = blk.bps * blk.sectors;
 
     return dev;
 }

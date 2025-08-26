@@ -130,18 +130,27 @@ typedef struct {
     int (*ioctl)(file_t*, size_t, size_t);
 } devfs_ops_t;
 
-// Block device operations
-typedef struct {
-    int (*read)(void*, size_t, size_t, void*);
-    int (*write)(void*, size_t, size_t, void*);
-} devfs_blk_t;
+// Block device flags
+enum {
+    BLKDEV_REMOVEABLE    = (1 << 0),
+    BLKDEV_MEDIA_ABSENT  = (1 << 1),
+    BLKDEV_MEDIA_CHANGED = (1 << 2),
+};
 
-// Block device geometry descriptor
+// Block device descriptor
 typedef struct {
     size_t bps;
     size_t sectors;
     size_t offset;
-} devfs_gd_t;
+    size_t flags;
+} blkdev_t;
+
+// Block device operations
+typedef struct {
+    int (*status)(void*, blkdev_t*, int);
+    int (*read)(void*, size_t, size_t, void*);
+    int (*write)(void*, size_t, size_t, void*);
+} devfs_blk_t;
 
 // Filesystem
 struct vfs_fs {
@@ -169,7 +178,6 @@ typedef struct devfs {
         devfs_ops_t *ops;  // Stream operations
         devfs_blk_t *blk;  // Block operations
     };
-    devfs_gd_t gd;         // Geometry descriptor
     void *data;            // Private device data
     devfs_t *next;         // Link to next
     devfs_t *child;        // Link to children

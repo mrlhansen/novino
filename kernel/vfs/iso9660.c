@@ -334,20 +334,18 @@ static int iso9660_lookup(inode_t *ip, const char *name, inode_t *inode)
 static void *iso9660_mount(devfs_t *dev, inode_t *inode)
 {
     iso9660_dirent_t *root;
-    iso9660_pvd_t *pvd;
+    iso9660_pvd_t *vds, *pvd;
     iso9660_t *fs;
     int status;
 
-    kp_info("iso", "trying to mount iso9660");
-
-    pvd = kzalloc(8192); // should not be allocated?
-    status = iso9660_read_sectors(dev, 16, 4, pvd);
+    vds = kzalloc(8192); // should not be allocated?
+    status = iso9660_read_sectors(dev, 16, 4, vds);
     if(status < 0)
     {
         return 0;
     }
 
-    if(strncmp("CD001", pvd->id_standard, 5) != 0)
+    if(strncmp("CD001", vds->id_standard, 5) != 0)
     {
         return 0;
     }
@@ -360,23 +358,25 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
 
     fs->joliet_level = 0;
     fs->dev = dev;
+    pvd = 0;
 
     for(int i = 0; i < 4; i++)
     {
-        root = (void*)pvd->root_record;
+        root = (void*)vds->root_record;
 
-        if(pvd->type == ISO9660_PVD)
+        if(vds->type == ISO9660_PVD)
         {
-            fs->bps = pvd->logical_block_size;
-            fs->sectors = pvd->space_size;
+            fs->bps = vds->logical_block_size;
+            fs->sectors = vds->space_size;
             fs->root_extent = root->extent;
             fs->root_size = root->extent_size;
+            pvd = vds;
         }
-        else if(pvd->type == ISO9660_SVD)
+        else if(vds->type == ISO9660_SVD)
         {
-            if(pvd->escape_sequence[0] == 0x25 && pvd->escape_sequence[1] == 0x2F)
+            if(vds->escape_sequence[0] == 0x25 && vds->escape_sequence[1] == 0x2F)
             {
-                switch(pvd->escape_sequence[2])
+                switch(vds->escape_sequence[2])
                 {
                     case 0x40:
                         fs->joliet_level = 1; // Sequence: %\@
@@ -395,12 +395,18 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
                 fs->root_size = root->extent_size;
             }
         }
-        else if(pvd->type == ISO9660_VTD)
+        else if(vds->type == ISO9660_VTD)
         {
             break;
         }
 
-        pvd++;
+        vds++;
+    }
+
+    if(!pvd)
+    {
+        kfree(fs);
+        return 0;
     }
 
     inode->ino = fs->root_extent;
@@ -412,7 +418,12 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
     inode->blocks = fs->root_size / fs->bps;
     inode->blksz = fs->bps;
 
-    kp_info("iso9660", "joilet level: %d", fs->joliet_level);
+    kp_info("isofs", "volume identifier: %.32s", pvd->id_volume);
+    if(fs->joliet_level)
+    {
+        kp_info("isofs", "joilet level: %d", fs->joliet_level);
+    }
+    kp_info("isofs", "volume geometry: %d sectors, %d bps", fs->sectors, fs->bps);
 
     return fs;
 }
