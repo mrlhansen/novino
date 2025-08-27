@@ -1,7 +1,7 @@
 #pragma once
 
 #include <kernel/sched/threads.h>
-#include <kernel/vfs/fd.h>
+#include <kernel/vfs/types.h>
 #include <kernel/lists.h>
 
 struct process {

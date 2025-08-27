@@ -272,13 +272,13 @@ void initrd_init(uint64_t address, uint32_t size)
     // check format
     if(memcmp(tar->magic, TMAGIC, TMAGLEN))
     {
-        kp_warn("initrd" ,"invalid initrd format");
+        kp_warn("initrd", "invalid initrd format");
         return;
     }
 
     if(memcmp(tar->version, TVERSION, TVERSLEN))
     {
-        kp_warn("initrd" ,"invalid initrd format");
+        kp_warn("initrd", "invalid initrd format");
         return;
     }
 

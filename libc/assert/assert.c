@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 void __assert(const char *file, unsigned int line, const char *desc)
 {
-    // Assertion failed: a == 0 at program.c, line 23
-    while(1);
+    printf("Assertion failed: %s at %s, line %d", desc, file, line);
+    exit(-1); // should call abort
 }

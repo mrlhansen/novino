@@ -82,3 +82,9 @@ static inline long syscall(size_t id, size_t arg0, size_t arg1, size_t arg2, siz
 
 #define sys_getpid() \
     syscall(16, 0, 0, 0, 0, 0)
+
+#define sys_mount(source, fstype, target) \
+    syscall(17, (size_t)source, (size_t)fstype, (size_t)target, 0, 0)
+
+#define sys_umount(target) \
+    syscall(18, (size_t)target, 0, 0, 0, 0)

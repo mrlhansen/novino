@@ -53,7 +53,7 @@ dentry_t *dcache_lookup(dentry_t *parent, const char *name)
     return 0;
 }
 
-dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode, int invalid)
+dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode)
 {
     dentry_t *dentry;
 
@@ -76,8 +76,8 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode, int 
     }
     else
     {
-        parent->negative++;
         dentry->inode = 0;
+        parent->negative++;
     }
 
     dentry->parent = parent;
@@ -85,4 +85,24 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode, int 
     parent->child = dentry;
 
     return dentry;
+}
+
+void dcache_purge(dentry_t *root)
+{
+    dentry_t *item;
+
+    item = root->child;
+    while(item)
+    {
+        dcache_purge(item);
+        item = item->next;
+    }
+
+    item = root->child;
+    while(item)
+    {
+        root = item->next;
+        kfree(item);
+        item = root;
+    }
 }

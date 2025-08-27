@@ -223,26 +223,46 @@ static long sys_getpid()
     return pr->pid;
 }
 
+static long sys_mount(const char *device, const char *fsname, const char *name)
+{
+    assert_nonzero(device);
+    assert_nonzero(fsname);
+    assert_nonzero(name);
+    assert_userspace(device);
+    assert_userspace(fsname);
+    assert_userspace(name);
+    return vfs_mount(device, fsname, name);
+}
+
+static long sys_umount(const char *name)
+{
+    assert_nonzero(name);
+    assert_userspace(name);
+    return vfs_umount(name);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
-    &sys_exit,    //  0 = exit
-    &sys_open,    //  1 = open
-    &sys_close,   //  2 = close
-    &sys_read,    //  3 = read
-    &sys_write,   //  4 = write
-    &sys_seek,    //  5 = seek
-    &sys_ioctl,   //  6 = ioctl
-    &sys_fstat,   //  7 = fstat
-    &sys_stat,    //  8 = stat
-    &sys_readdir, //  9 = readdir
-    &sys_brk,     // 10 = brk
-    &sys_spawnve, // 11 = spawnve
-    &sys_wait,    // 12 = wait
-    &sys_chdir,   // 13 = chdir
-    &sys_default, // 14 = fchdir
-    &sys_getcwd,  // 15 = getcwd
-    &sys_getpid,  // 16 = getpid
+    sys_exit,    //  0 = exit
+    sys_open,    //  1 = open
+    sys_close,   //  2 = close
+    sys_read,    //  3 = read
+    sys_write,   //  4 = write
+    sys_seek,    //  5 = seek
+    sys_ioctl,   //  6 = ioctl
+    sys_fstat,   //  7 = fstat
+    sys_stat,    //  8 = stat
+    sys_readdir, //  9 = readdir
+    sys_brk,     // 10 = brk
+    sys_spawnve, // 11 = spawnve
+    sys_wait,    // 12 = wait
+    sys_chdir,   // 13 = chdir
+    sys_default, // 14 = fchdir
+    sys_getcwd,  // 15 = getcwd
+    sys_getpid,  // 16 = getpid
+    sys_mount,   // 17 = mount
+    sys_umount,  // 18 = umount
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

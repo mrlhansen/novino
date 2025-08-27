@@ -167,6 +167,7 @@ struct vfs_mp {
     devfs_t *dev;       // Link to device
     inode_t inode;      // Root inode
     dentry_t dentry;    // Root dentry
+    atomic_t numfd;     // Number of open files for this mountpoint
     link_t link;        // Link for list of mountpoints
 };
 

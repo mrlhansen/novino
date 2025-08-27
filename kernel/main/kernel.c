@@ -102,8 +102,12 @@ void kmain(bootstruct_t *bs)
     sti();
     irq_init();
 
-    // Timing
+    // Time
     time_init();
+
+    // File systems
+    vfs_init();
+    initrd_init(bs->initrd_address, bs->initrd_size);
 
     // Multitasking
     kthreads_init();
@@ -111,8 +115,6 @@ void kmain(bootstruct_t *bs)
     scheduler_init();
 
     // Subsystems
-    vfs_init();
-    initrd_init(bs->initrd_address, bs->initrd_size);
     input_init();
     term_init();
 

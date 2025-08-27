@@ -3,6 +3,7 @@
 #include <kernel/mem/heap.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/vfs/vfs.h>
+#include <kernel/vfs/fd.h>
 #include <kernel/errno.h>
 #include <string.h>
 
@@ -110,6 +111,9 @@ void process_exit(int status)
         vfs_close(fd->id);
     }
 
+    // close working directory
+    vfs_proc_fini(self);
+
     // destroy address space
     vmm_destroy_user_space();
 
@@ -197,6 +201,9 @@ process_t *process_create(const char *name, uint64_t pml4, process_t *parent)
     {
         process->parent = process;
     }
+
+    // Set working directory
+    vfs_proc_init(process, process->cwd);
 
     // Append to list of processes
     list_insert(&global_process_list, process);

@@ -1,6 +1,7 @@
-#include <kernel/vfs/vfs.h>
-#include <kernel/vfs/devfs.h>
 #include <kernel/vfs/iso9660.h>
+#include <kernel/vfs/devfs.h>
+#include <kernel/vfs/vfs.h>
+#include <kernel/vfs/fd.h>
 #include <kernel/sched/process.h>
 #include <kernel/mem/heap.h>
 #include <kernel/cleanup.h>
@@ -207,14 +208,7 @@ static vfs_path_t *vfs_new_path(const char *str)
     else
     {
         pr = process_handle();
-        if(pr->cwd)
-        {
-            path->root = pr->cwd;
-        }
-        else
-        {
-            path->root = root;
-        }
+        path->root = pr->cwd;
     }
 
     // clean the path
@@ -323,6 +317,28 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
     }
 
     return 0;
+}
+
+void vfs_proc_init(process_t *pr, dentry_t *cwd)
+{
+    vfs_mp_t *mp;
+
+    if(!cwd)
+    {
+        cwd = root;
+    }
+
+    pr->cwd = cwd;
+    mp = cwd->inode->mp;
+
+    atomic_inc(&mp->numfd);
+}
+
+void vfs_proc_fini(process_t *pr)
+{
+    vfs_mp_t *mp;
+    mp = pr->cwd->inode->mp;
+    atomic_dec(&mp->numfd);
 }
 
 int vfs_put_dirent(void *data, const char *name, inode_t *inode)
@@ -687,6 +703,7 @@ int vfs_ioctl(int id, size_t cmd, size_t val)
 
 int vfs_chdir(const char *pathname)
 {
+    vfs_mp_t *curr, *next;
     process_t *pr;
     dentry_t *dp;
     int status;
@@ -703,7 +720,15 @@ int vfs_chdir(const char *pathname)
     }
 
     pr = process_handle();
+    curr = pr->cwd->inode->mp;
+    next = dp->inode->mp;
     pr->cwd = dp;
+
+    if(curr != next)
+    {
+        atomic_dec(&curr->numfd);
+        atomic_inc(&next->numfd);
+    }
 
     return 0;
 }
@@ -717,10 +742,6 @@ int vfs_getcwd(char *pathname, int size)
 
     pr = process_handle();
     dp = pr->cwd;
-    if(dp == 0)
-    {
-        dp = root;
-    }
     s = pathname;
 
     if(size == 0)
@@ -824,6 +845,7 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
+    atomic_inc(&ip->mp->numfd);
     return fd->id;
 }
 
@@ -862,11 +884,12 @@ int vfs_close(int id)
         status = 0;
     }
 
+    atomic_dec(&ip->mp->numfd);
     kfree(file);
     return status;
 }
 
-int vfs_mount(const char *device, const char *fsn, const char *mpn)
+int vfs_mount(const char *source, const char *fstype, const char *target)
 {
     vfs_mp_t *mp;
     vfs_fs_t *fs;
@@ -876,31 +899,31 @@ int vfs_mount(const char *device, const char *fsn, const char *mpn)
     void *data;
     int status;
 
-    if((fsn == 0) || (mpn == 0))
+    if((fstype == 0) || (target == 0))
     {
         return -EINVAL;
     }
 
-    status = vfs_validate_name(mpn, sizeof(mp->name));
+    status = vfs_validate_name(target, sizeof(mp->name));
     if(status)
     {
         return status;
     }
 
-    fs = vfs_find_fs(fsn);
+    fs = vfs_find_fs(fstype);
     if(fs == 0)
     {
         return -ENOFS;
     }
 
-    if(vfs_find_mp(mpn))
+    if(vfs_find_mp(target))
     {
         return -EEXIST;
     }
 
-    if(device)
+    if(source)
     {
-        status = vfs_walk_path(device, &dp);
+        status = vfs_walk_path(source, &dp);
         if(status < 0)
         {
             return status;
@@ -912,6 +935,9 @@ int vfs_mount(const char *device, const char *fsn, const char *mpn)
         }
 
         dev = dp->inode->obj;
+
+        // TODO: need to check if device is already mounted
+        // we might need some sort of lock/release on block devices
     }
     else
     {
@@ -930,7 +956,7 @@ int vfs_mount(const char *device, const char *fsn, const char *mpn)
         return -ENOMEM;
     }
 
-    strcpy(mp->name, mpn);
+    strcpy(mp->name, target);
     mp->fs = fs;
     mp->dev = dev;
 
@@ -939,28 +965,60 @@ int vfs_mount(const char *device, const char *fsn, const char *mpn)
     mp->inode.mp = mp;
     mp->inode.data = data;
 
-    strcpy(mp->dentry.name, mpn);
+    strcpy(mp->dentry.name, target);
     mp->dentry.inode = &mp->inode;
     mp->dentry.parent = root;
 
     list_insert(&mpl, mp);
 
-    kp_info("vfs", "mounted %s on /%s", fsn, mpn);
+    kp_info("vfs", "mounted %s on /%s", fstype, target);
     return 0;
 }
 
-int vfs_register(const char *name, vfs_ops_t *ops)
+int vfs_umount(const char *target)
+{
+    vfs_mp_t *mp;
+    vfs_fs_t *fs;
+    int status;
+
+    mp = vfs_find_mp(target);
+    if(!mp)
+    {
+        return -EINVAL;
+    }
+    fs = mp->fs;
+
+    if(mp->numfd)
+    {
+        return -EBUSY;
+    }
+
+    status = fs->ops->umount(mp->inode.data);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    list_remove(&mpl, mp);
+    dcache_purge(&mp->dentry);
+    kfree(mp);
+
+    kp_info("vfs", "unmounted /%s", target);
+    return 0;
+}
+
+int vfs_register(const char *fstype, vfs_ops_t *ops)
 {
     vfs_fs_t *fs;
     int status;
 
-    status = vfs_validate_name(name, sizeof(fs->name));
+    status = vfs_validate_name(fstype, sizeof(fs->name));
     if(status)
     {
         return status;
     }
 
-    if(vfs_find_fs(name))
+    if(vfs_find_fs(fstype))
     {
         return -ENOFS;
     }
@@ -976,17 +1034,18 @@ int vfs_register(const char *name, vfs_ops_t *ops)
         return -ENOMEM;
     }
 
-    strcpy(fs->name, name);
+    strcpy(fs->name, fstype);
     fs->ops = ops;
     list_insert(&fsl, fs);
 
-    kp_info("vfs", "registered filesystem %s", name);
+    kp_info("vfs", "registered filesystem %s", fstype);
     return 0;
 }
 
 void vfs_init()
 {
     static vfs_ops_t ops = {0};
+    static vfs_mp_t mp = {0};
 
     static vfs_fs_t fs = {
         .ops = &ops,
@@ -995,6 +1054,7 @@ void vfs_init()
     static inode_t inode = {
         .flags = I_DIR,
         .fs = &fs,
+        .mp = &mp,
         .uid = 0,
         .gid = 0,
         .mode = 0755,
