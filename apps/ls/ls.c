@@ -27,7 +27,7 @@ static void ls(const char *path, DIR *dp)
         {
             sprintf(buf, "%s/%s", path, dent->d_name);
             stat(buf, &st);
-            printf("%c%c%c%c%c%c%c%c%c%c % 4d % 4d %8d %s\n",
+            printf("%c%c%c%c%c%c%c%c%c%c % 4u % 4u %8lu %s\n",
                 (dent->d_type == DT_DIR) ? 'd' : '-',
                 (st.st_mode & 0400) ? 'r' : '-',
                 (st.st_mode & 0200) ? 'w' : '-',

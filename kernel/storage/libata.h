@@ -7,14 +7,15 @@
 #define ATA_DMA_SIZE 524288
 
 typedef struct {
-    uint64_t sectors;
-    uint32_t bps;
-    uint32_t flags;
-    uint8_t revision;
-    uint8_t atapi;
-    char serial[21];
-    char firmware[9];
-    char model[41];
+    uint64_t sectors;  // Total number of logical sectors
+    uint32_t pss;      // Physical sector size
+    uint32_t lss;      // Logical sector size
+    uint32_t flags;    // Feature flags
+    uint8_t revision;  // ATA revision
+    uint8_t atapi;     // ATAPI device (boolean)
+    char serial[21];   // Serial string
+    char firmware[9];  // Firmware string
+    char model[41];    // Model string
 } ata_info_t;
 
 typedef struct ata_queue {

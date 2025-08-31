@@ -142,7 +142,7 @@ static int ahci_poll_event(ahci_dev_t *dev, int type)
     uint64_t now, end;
 
     now = system_timestamp();
-    end = now + 100'000'000; // 100ms
+    end = now + 100000000; // 100ms
 
     while(now < end)
     {
@@ -234,7 +234,15 @@ static int ahci_atapi_packet(ahci_dev_t *dev, uint8_t *packet, int size, int pol
         prd.size = size;
         prd.ioc = 1;
 
-        fis.features = 1; // ATA_FEAT_PACKET_DMA
+        // Data transfer is via DMA (ATA-8, 7.22 PACKET)
+        fis.features |= 1;
+
+        // DMA direction (ATA-8, 7.22 PACKET)
+        if(dev->disk.flags & ATA_FLAG_DMADIR)
+        {
+            fis.features |= 4;
+        }
+
         numprd++;
     }
 
@@ -434,9 +442,9 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
 
     fis.type = FIS_TYPE_REG_H2D;
     fis.atapi = 0;
-    fis.command = ATA_CMD_READ_DMA_EXT;
+    fis.command = (write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT);
     fis.features = 0;
-    fis.device = (1 << 6); // LBA mode
+    fis.device = (1 << 6); // LBA mode (ATA-8, 7.25 READ DMA EXT)
     fis.lba = lba;
     fis.count = count;
 

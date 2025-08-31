@@ -179,6 +179,7 @@ typedef struct {
     hba_prdt_t prdt[8]; // Physical region descriptor table entries (0 - 65535)
 } __attribute__((packed)) hba_ctbl_t;
 
+// Host to Device FIS layout (SATA 3.0, Figure 194)
 typedef struct {
     uint8_t  type;       // FIS_TYPE_REG_H2D
     uint8_t  pmport : 4; // Port multiplier
