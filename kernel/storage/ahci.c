@@ -1,4 +1,5 @@
 // #include <kernel/storage/partmgr.h>
+#include <kernel/storage/blkdev.h>
 #include <kernel/storage/ahci.h>
 #include <kernel/vfs/devfs.h>
 #include <kernel/mem/mmio.h>
@@ -297,7 +298,8 @@ static int ahci_atapi_read_capacity(ahci_dev_t *dev)
     bps = (bps << 8) | data[7];
 
     dev->disk.sectors = sectors + 1;
-    dev->disk.bps = bps;
+    dev->disk.lss = bps;
+    dev->disk.pss = bps;
 
     return 0;
 }
@@ -486,7 +488,7 @@ static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
         return status;
     }
 
-    memcpy(buf, (void*)dev->dma.virt, dev->disk.bps * count);
+    memcpy(buf, (void*)dev->dma.virt, dev->disk.lss * count);
     return 0;
 }
 
@@ -501,7 +503,7 @@ static int ahci_status(void *data, blkdev_t *blk, int ack)
     ahci_dev_t *dev = data;
     int status = 0;
 
-    blk->bps = dev->disk.bps;
+    blk->bps = dev->disk.lss;
     blk->sectors = dev->disk.sectors;
     blk->offset = 0;
     blk->flags = 0;

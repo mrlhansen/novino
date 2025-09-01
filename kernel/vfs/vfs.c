@@ -237,7 +237,7 @@ static char *vfs_read_path(vfs_path_t *path)
 
 static int vfs_walk_path(const char *pathname, dentry_t **dp)
 {
-    autofree(vfs_path_t) *path;
+    autofree(vfs_path_t) *path = 0;
     dentry_t *parent, *child;
     inode_t inode, *ip;
     vfs_mp_t *mp;

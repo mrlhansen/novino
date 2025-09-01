@@ -1,3 +1,4 @@
+#include <kernel/storage/blkdev.h>
 #include <kernel/vfs/devfs.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/mem/heap.h>
@@ -148,7 +149,7 @@ devfs_t *devfs_stream_register(devfs_t *parent, const char *name, devfs_ops_t *o
 devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *ops, void *data, stat_t *stat)
 {
     devfs_t *dev;
-    blkdev_t blk;
+    blkdev_t bd;
 
     if(!ops->status)
     {
@@ -164,11 +165,11 @@ devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *op
     dev->data = data;
     dev->blk = ops;
 
-    ops->status(data, &blk, 1);
+    ops->status(data, &bd, 1);
 
-    dev->inode.blksz = blk.bps;
-    dev->inode.blocks = blk.sectors;
-    dev->inode.size = blk.bps * blk.sectors;
+    dev->inode.blksz  = bd.bps;
+    dev->inode.blocks = bd.sectors;
+    dev->inode.size   = bd.bps * bd.sectors;
 
     return dev;
 }
@@ -376,14 +377,16 @@ static int devfs_lookup(inode_t *ip, const char *name, inode_t *inode)
 
 static void *devfs_mount(devfs_t *dev, inode_t *inode)
 {
-    if(mounted)
+    if(mounted || dev)
     {
         return 0;
     }
+    else
+    {
+        mounted = 1;
+    }
 
-    mounted = 1;
     *inode = root->inode;
-
     return root;
 }
 

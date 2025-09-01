@@ -33,6 +33,7 @@ enum {
 #define SEEK_END 2 // Seek relative to end
 
 // Type definitions
+typedef struct blkdev blkdev_t;
 typedef struct devfs devfs_t;
 typedef struct vfs_fs vfs_fs_t;
 typedef struct vfs_mp vfs_mp_t;
@@ -130,21 +131,6 @@ typedef struct {
     int (*ioctl)(file_t*, size_t, size_t);
 } devfs_ops_t;
 
-// Block device flags
-enum {
-    BLKDEV_REMOVEABLE    = (1 << 0),
-    BLKDEV_MEDIA_ABSENT  = (1 << 1),
-    BLKDEV_MEDIA_CHANGED = (1 << 2),
-};
-
-// Block device descriptor
-typedef struct {
-    size_t bps;
-    size_t sectors;
-    size_t offset;
-    size_t flags;
-} blkdev_t;
-
 // Block device operations
 typedef struct {
     int (*status)(void*, blkdev_t*, int);
@@ -175,6 +161,8 @@ struct vfs_mp {
 typedef struct devfs {
     char name[MAX_SFN];    // Name of device
     inode_t inode;         // Device inode
+    lock_t lock;           // Lock for exclusive access
+    blkdev_t *bd;          // Block device descriptor
     union {
         devfs_ops_t *ops;  // Stream operations
         devfs_blk_t *blk;  // Block operations

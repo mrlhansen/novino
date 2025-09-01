@@ -9,6 +9,7 @@
 
 static void *root = 0;
 static void *end = 0;
+static int mounted = 0;
 
 static int oct2bin(char *c, int size)
 {
@@ -239,17 +240,28 @@ static int initrd_lookup(inode_t *ip, const char *name, inode_t *inode)
 
 static void *initrd_mount(devfs_t *dev, inode_t *inode)
 {
+    if(mounted || dev)
+    {
+        return 0;
+    }
+    else
+    {
+        mounted = 1;
+    }
+
     inode->obj = 0;
     inode->flags = I_DIR;
     inode->mode = 0755;
     inode->uid = 0;
     inode->gid = 0;
     inode->size = 0;
+
     return root;
 }
 
 static int initrd_umount(void *data)
 {
+    mounted = 0;
     return 0;
 }
 

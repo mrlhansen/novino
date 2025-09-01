@@ -1,15 +1,14 @@
+#include <kernel/storage/blkdev.h>
 #include <kernel/vfs/iso9660.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/mem/heap.h>
+#include <kernel/cleanup.h>
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 #include <string.h>
 #include <ctype.h>
 
-static inline int iso9660_read_sectors(devfs_t *dev, size_t lba, size_t count, void *buf)
-{
-    return dev->blk->read(dev->data, lba, count, buf);
-}
+DEFINE_AUTOFREE_TYPE(void)
 
 static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *inode, int joliet)
 {
@@ -117,11 +116,11 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
 
 static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const char *lookup_name, inode_t *lookup_inode)
 {
+    autofree(void) *tmpbuf = 0;
     iso9660_dirent_t *dirent;
     iso9660_t *fs;
     inode_t inode;
     char filename[256];
-    void *buf;
     int offset, status;
     int ns, cs;
 
@@ -130,9 +129,13 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
     cs = 0;
     offset = 0;
 
-    buf = kmalloc(ip->size); // do not allocate
+    tmpbuf = kmalloc(ip->size);
+    if(!tmpbuf)
+    {
+        return -ENOMEM;
+    }
 
-    status = iso9660_read_sectors(fs->dev, ip->ino, ip->blocks, buf);
+    status = blkdev_read(fs->dev, ip->ino, ip->blocks, tmpbuf);
     if(status < 0)
     {
         return status;
@@ -140,7 +143,7 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
 
     while(cs < ns)
     {
-        dirent = (void*)(buf + offset);
+        dirent = (void*)(tmpbuf + offset);
         offset += dirent->length;
 
         if(dirent->length == 0)
@@ -192,17 +195,15 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
         }
     }
 
-    kfree(buf);
-
     return 0;
 }
 
 static int iso9660_read(file_t *file, size_t size, void *buf)
 {
-    iso9660_t *fs;
+    autofree(void) *tmpbuf = 0;
     size_t fsize, fstart, esize;
     size_t offset, whole;
-    void *blkbuf;
+    iso9660_t *fs;
     int status;
 
     fs = file->inode->data;
@@ -210,7 +211,7 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
     // (offset, whole) are in units of sectors
     // (fsize, fstart, esize) are in units of bytes
 
-    if((file->seek + size) > file->inode->size)
+    if((file->seek + size) > file->inode->size) // move this to vfs?
     {
         size = file->inode->size - file->seek;
     }
@@ -239,23 +240,27 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
     whole = (size - fsize) / fs->bps;
     esize = (size - fsize) % fs->bps;
 
-    blkbuf = kmalloc(fs->bps); // remove
+    tmpbuf = kmalloc(fs->bps);
+    if(!tmpbuf)
+    {
+        return -ENOMEM;
+    }
 
     if(fsize)
     {
-        status = iso9660_read_sectors(fs->dev, offset, 1, blkbuf);
+        status = blkdev_read(fs->dev, offset, 1, tmpbuf);
         if(status < 0)
         {
             return status;
         }
-        memcpy(buf, blkbuf + fstart, fsize);
+        memcpy(buf, tmpbuf + fstart, fsize);
         buf += fsize;
         offset++;
     }
 
     if(whole)
     {
-        status = iso9660_read_sectors(fs->dev, offset, whole, buf);
+        status = blkdev_read(fs->dev, offset, whole, buf);
         if(status < 0)
         {
             return status;
@@ -266,15 +271,13 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
 
     if(esize)
     {
-        status = iso9660_read_sectors(fs->dev, offset, 1, blkbuf);
+        status = blkdev_read(fs->dev, offset, 1, tmpbuf);
         if(status < 0)
         {
             return status;
         }
-        memcpy(buf, blkbuf, esize);
+        memcpy(buf, tmpbuf, esize);
     }
-
-    kfree(blkbuf); // remove
 
     file->seek += size;
     return size;
@@ -333,26 +336,43 @@ static int iso9660_lookup(inode_t *ip, const char *name, inode_t *inode)
 
 static void *iso9660_mount(devfs_t *dev, inode_t *inode)
 {
+    autofree(void) *tmpbuf = 0;
     iso9660_dirent_t *root;
     iso9660_pvd_t *vds, *pvd;
     iso9660_t *fs;
     int status;
 
-    vds = kzalloc(8192); // should not be allocated?
-    status = iso9660_read_sectors(dev, 16, 4, vds);
+    status = blkdev_open(dev);
     if(status < 0)
     {
         return 0;
     }
 
-    if(strncmp("CD001", vds->id_standard, 5) != 0)
+    tmpbuf = kmalloc(8192);
+    if(!tmpbuf)
     {
+        blkdev_close(dev);
         return 0;
     }
 
-    fs = kzalloc(sizeof(*fs));
+    vds = tmpbuf;
+    status = blkdev_read(dev, 16, 4, vds);
+    if(status < 0)
+    {
+        blkdev_close(dev);
+        return 0;
+    }
+
+    if(strncmp("CD001", vds->id_standard, 5) != 0)
+    {
+        blkdev_close(dev);
+        return 0;
+    }
+
+    fs = kzalloc(sizeof(iso9660_t));
     if(fs == 0)
     {
+        blkdev_close(dev);
         return 0;
     }
 
@@ -406,6 +426,7 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
     if(!pvd)
     {
         kfree(fs);
+        blkdev_close(dev);
         return 0;
     }
 
@@ -430,7 +451,9 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
 
 int iso9660_umount(void *data)
 {
-    kfree(data);
+    iso9660_t *fs = data;
+    blkdev_close(fs->dev);
+    kfree(fs);
     return 0;
 }
 
