@@ -1,4 +1,5 @@
 #include <kernel/vfs/iso9660.h>
+#include <kernel/vfs/ext2.h>
 #include <kernel/vfs/devfs.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/vfs/fd.h>
@@ -1077,5 +1078,7 @@ void vfs_init()
 
     devfs_init();
     iso9660_init();
+    ext2_init();
+
     vfs_mount(0, "devfs", "devices");
 }

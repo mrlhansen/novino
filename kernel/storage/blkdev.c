@@ -61,7 +61,14 @@ static inline int blkdev_rw(devfs_t *dev, size_t offset, size_t count, void *dat
         return -EINVAL;
     }
 
-    return dev->blk->read(dev->data, offset, count, data);
+    if(write)
+    {
+        return dev->blk->write(dev->data, offset, count, data);
+    }
+    else
+    {
+        return dev->blk->read(dev->data, offset, count, data);
+    }
 }
 
 int blkdev_read(devfs_t *dev, size_t offset, size_t count, void *data)

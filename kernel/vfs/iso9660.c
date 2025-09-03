@@ -160,7 +160,7 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
                 // ignore .
                 continue;
             }
-            else if(dirent->filename[0] == 1)
+            if(dirent->filename[0] == 1)
             {
                 // ignore ..
                 continue;
@@ -175,7 +175,7 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
 
         iso9660_dirent(dirent, filename, &inode, fs->joliet_level);
         inode.blksz = fs->bps;
-        inode.blocks = (inode.size + fs->bps - 1) / fs->bps;
+        inode.blocks = (inode.size + inode.blksz - 1) / inode.blksz;
 
         if(data)
         {
