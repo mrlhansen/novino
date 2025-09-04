@@ -260,7 +260,7 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
 
     if(whole)
     {
-        status = blkdev_read(fs->dev, offset, whole, buf);
+        status = blkdev_read(fs->dev, offset, whole, buf); // This does not work, buf is from user space and not accessible from the libata worker thread
         if(status < 0)
         {
             return status;

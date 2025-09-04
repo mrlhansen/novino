@@ -20,7 +20,7 @@ static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino)
     dp->ino = ino;
     dp->size = sp->size;
     dp->flags = 0;
-    dp->links = sp->links_count;
+    dp->links = sp->links;
     dp->atime = sp->atime;
     dp->mtime = sp->ctime;
     dp->ctime = sp->mtime;
@@ -181,6 +181,7 @@ static ext2_bgd_t *ext2_read_bgd(ext2_t *fs, uint32_t bg, void *data) // take ex
 
     block = fs->bgds_start + (bg / fs->bgds_per_block);
     offset = (bg % fs->bgds_per_block);
+
     status = ext2_read_block(fs, block, data);
     if(status < 0)
     {
@@ -194,7 +195,7 @@ static ext2_bgd_t *ext2_read_bgd(ext2_t *fs, uint32_t bg, void *data) // take ex
 static int ext2_read_inode(ext2_t *fs, ext2_inode_t *ip, uint32_t inode)
 {
     autofree(void) *tmpbuf = 0;
-    uint32_t group, offset, block;
+    uint32_t group, block;
     ext2_bgd_t *bgd;
     int status;
 
@@ -212,11 +213,10 @@ static int ext2_read_inode(ext2_t *fs, ext2_inode_t *ip, uint32_t inode)
     bgd = ext2_read_bgd(fs, group, tmpbuf);
     if(bgd == 0)
     {
-        return fs->errno;
+        return 0;//fs->errno;
     }
 
-    offset = bgd->inode_table;
-    status = ext2_read_block(fs, block + offset, tmpbuf);
+    status = ext2_read_block(fs, block + bgd->inode_table, tmpbuf);
     if(status < 0)
     {
         return status;
@@ -254,7 +254,7 @@ static int ext2_walk_directory(inode_t *ip, size_t seek, void *data, const char 
     }
     else
     {
-        count = (i_dir.sectors_count / fs->sectors_per_block);
+        count = (i_dir.sectors / fs->sectors_per_block);
     }
 
     for(int i = 0; i < count; i++)
@@ -408,7 +408,7 @@ static int ext2_read(file_t *file, size_t size, void *buf)
     while(whole--)
     {
         block = ext2_inode_block(fs, &ip, offset);
-        status = ext2_read_block(fs, block, buf);
+        status = ext2_read_block(fs, block, buf); // This does not work, buf is from user space and not accessible from the libata worker thread
         if(status < 0)
         {
             return status;
@@ -556,7 +556,7 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     ext2_read_inode(fs, &root, 2); // this could in principle also fail
     entry_to_inode(&root, inode, 2);
 
-    kp_info("ext2", "version: ext%d",version);
+    kp_info("ext2", "version: ext%d", version);
     kp_info("ext2", "required: %#04x", sb->features_required); // 0x0002 = Directory entries contain a type field
     kp_info("ext2", "readonly: %#04x", sb->features_readonly); // 0x0003 = Sparse superblocks and group descriptor tables, File system uses a 64-bit file size
     kp_info("ext2", "optional: %#04x", sb->features_optional); // 0x0038 =  Inodes have extended attributes, File system can resize itself for larger partitions, Directories use hash index
