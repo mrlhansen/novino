@@ -2,6 +2,7 @@
 
 #include <kernel/vfs/devfs.h>
 #include <kernel/types.h>
+#include <kernel/atomic.h>
 
 // ext2 superblock
 typedef struct {
@@ -107,6 +108,20 @@ typedef struct {
     uint8_t version;             // File system version (ext2,3,4)
     ext2_sb_t *sb;               // Superblock
     devfs_t *dev;                // Block device
+    void *ctx;                   // Default context
 } ext2_t;
+
+typedef struct {
+    lock_t lock;
+    ext2_t *fs;
+    uint32_t bgd_block;
+    uint32_t ino_block;
+    uint32_t ptr_ident;
+    uint32_t ptr_block;
+    void *bgd_data;
+    void *ino_data;
+    void *ptr_data;
+    void *tmp_data;
+} ext2_ctx_t;
 
 void ext2_init();

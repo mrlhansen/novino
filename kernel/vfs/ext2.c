@@ -2,13 +2,54 @@
 #include <kernel/mem/heap.h>
 #include <kernel/vfs/ext2.h>
 #include <kernel/vfs/vfs.h>
-#include <kernel/cleanup.h>
 #include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <string.h>
 
-DEFINE_AUTOFREE_TYPE(void)
-DEFINE_AUTOFREE_TYPE(uint32_t)
+static ext2_ctx_t *ext2_ctx_alloc(ext2_t *fs)
+{
+    ext2_ctx_t *ctx = fs->ctx;
+    int status;
+
+    if(ctx)
+    {
+        status = atomic_lock(&ctx->lock);
+        if(!status)
+        {
+            return ctx;
+        }
+    }
+
+    ctx = kzalloc(sizeof(ext2_ctx_t) + 4 * fs->block_size);
+    if(!ctx)
+    {
+        return 0;
+    }
+
+    ctx->fs = fs;
+    ctx->bgd_block = 0;
+    ctx->ino_block = 0;
+    ctx->ptr_ident = 0;
+    ctx->ptr_block = 0;
+    ctx->bgd_data = ctx + 1;
+    ctx->ino_data = ctx->bgd_data + fs->block_size;
+    ctx->ptr_data = ctx->ino_data + fs->block_size;
+    ctx->tmp_data = ctx->ptr_data + fs->block_size;
+
+    return ctx;
+}
+
+static void ext2_ctx_free(ext2_ctx_t *ctx)
+{
+    if(ctx == ctx->fs->ctx)
+    {
+        atomic_unlock(&ctx->lock);
+    }
+    else
+    {
+        kfree(ctx);
+    }
+}
 
 static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino)
 {
@@ -48,22 +89,21 @@ static inline int ext2_read_block(ext2_t *fs, uint32_t block, void *data)
     return blkdev_read(fs->dev, block, fs->sectors_per_block, data);
 }
 
-static long ext2_inode_block(ext2_t *fs, ext2_inode_t *inode, uint32_t offset)
+static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offset)
 {
-    autofree(uint32_t) *ptr = 0;
-    uint32_t block;
+    uint32_t ident, block;
+    uint32_t *ptr;
+    ext2_t *fs;
     int status;
+
+    fs = ctx->fs;
+    ptr = ctx->ptr_data;
+    ident = inode->block[0];
 
     long direct = 12;
     long singly = (fs->block_size / 4);
     long doubly = singly*singly;
     long triply = doubly*singly;
-
-    ptr = kmalloc(fs->block_size);
-    if(!ptr)
-    {
-        return -ENOMEM;
-    }
 
     if(offset < direct)
     {
@@ -72,6 +112,20 @@ static long ext2_inode_block(ext2_t *fs, ext2_inode_t *inode, uint32_t offset)
     else
     {
         offset -= direct;
+        block = offset / singly;
+
+        if(ctx->ptr_ident == ident)
+        {
+            if(block == ctx->ptr_block)
+            {
+                offset = offset % singly;
+                return ptr[offset];
+            }
+        }
+
+        ctx->ptr_ident = ident;
+        ctx->ptr_block = block;
+
         if(offset < singly)
         {
             block = inode->block[12];
@@ -173,62 +227,69 @@ static long ext2_inode_block(ext2_t *fs, ext2_inode_t *inode, uint32_t offset)
     return block;
 }
 
-static ext2_bgd_t *ext2_read_bgd(ext2_t *fs, uint32_t bg, void *data) // take ext2_bgd_t as argument and store it there
+static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd)
 {
     uint32_t block, offset;
-    ext2_bgd_t *bgd = data;
+    ext2_t *fs;
     int status;
 
+    fs = ctx->fs;
     block = fs->bgds_start + (bg / fs->bgds_per_block);
-    offset = (bg % fs->bgds_per_block);
+    offset = (bg % fs->bgds_per_block) * sizeof(ext2_bgd_t);
 
-    status = ext2_read_block(fs, block, data);
-    if(status < 0)
+    if(block != ctx->bgd_block)
     {
-        return 0;
+        status = ext2_read_block(fs, block, ctx->bgd_data);
+        if(status < 0)
+        {
+            return status;
+        }
+        ctx->bgd_block = block;
     }
 
-    bgd += offset;
-    return bgd;
+    *bgd = *(ext2_bgd_t*)(ctx->bgd_data + offset);
+    return 0;
 }
 
-static int ext2_read_inode(ext2_t *fs, ext2_inode_t *ip, uint32_t inode)
+static int ext2_read_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t inode)
 {
-    autofree(void) *tmpbuf = 0;
-    uint32_t group, block;
-    ext2_bgd_t *bgd;
+    uint32_t group, block, offset;
+    ext2_bgd_t bgd;
+    ext2_sb_t *sb;
+    ext2_t *fs;
     int status;
 
-    tmpbuf = kmalloc(fs->block_size);
-    if(!tmpbuf)
-    {
-        return -ENOMEM;
-    }
+    fs = ctx->fs;
+    sb = fs->sb;
 
-    group = (inode - 1) / fs->sb->inodes_per_group;
-    inode = (inode - 1) % fs->sb->inodes_per_group;
-    block = (inode * fs->sb->inode_size) / fs->block_size;
-    inode = (inode % fs->inodes_per_block) * fs->sb->inode_size;
+    group  = (inode - 1) / sb->inodes_per_group;
+    inode  = (inode - 1) % sb->inodes_per_group;
+    block  = (inode * sb->inode_size) / fs->block_size;
+    offset = (inode % fs->inodes_per_block) * sb->inode_size;
 
-    bgd = ext2_read_bgd(fs, group, tmpbuf);
-    if(bgd == 0)
-    {
-        return 0;//fs->errno;
-    }
-
-    status = ext2_read_block(fs, block + bgd->inode_table, tmpbuf);
+    status = ext2_read_bgd(ctx, group, &bgd);
     if(status < 0)
     {
         return status;
     }
+    block = block + bgd.inode_table;
 
-    *ip = *(ext2_inode_t*)(tmpbuf + inode);
+    if(block != ctx->ino_block)
+    {
+        status = ext2_read_block(fs, block, ctx->ino_data);
+        if(status < 0)
+        {
+            return status;
+        }
+        ctx->ino_block = block;
+    }
+
+    *ip = *(ext2_inode_t*)(ctx->ino_data + offset);
     return 0;
 }
 
-static int ext2_walk_directory(inode_t *ip, size_t seek, void *data, const char *lookup_name, inode_t *lookup_inode)
+static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *data, const char *lookup_name, inode_t *lookup_inode)
 {
-    autofree(void) *tmpbuf = 0;
     ext2_inode_t i_dir, i_ent;
     ext2_dentry_t *dent;
     inode_t inode;
@@ -238,44 +299,30 @@ static int ext2_walk_directory(inode_t *ip, size_t seek, void *data, const char 
     long block;
     char filename[256];
 
-    fs = ip->data;
-
-    tmpbuf = kmalloc(fs->block_size);
-    if(!tmpbuf)
-    {
-        return -ENOMEM;
-    }
-    ptr = tmpbuf;
-
-    status = ext2_read_inode(fs, &i_dir, ip->ino);
+    fs = ctx->fs;
+    status = ext2_read_inode(ctx, &i_dir, ip->ino);
     if(status < 0)
     {
         return status;
     }
-    else
-    {
-        count = (i_dir.sectors / fs->sectors_per_block);
-    }
+    count = (i_dir.sectors / fs->sectors_per_block);
 
     for(int i = 0; i < count; i++)
     {
-        block = ext2_inode_block(fs, &i_dir, i);
-        if(block < 0)
+        block = ext2_inode_block(ctx, &i_dir, i);
+        if(block < 1)
         {
             return block;
         }
-        if(block == 0)
-        {
-            break;
-        }
 
-        ptr = tmpbuf;
+        ptr = ctx->tmp_data;
+        end = ptr + fs->block_size;
+
         status = ext2_read_block(fs, block, ptr);
         if(status < 0)
         {
             return status;
         }
-        end = ptr + fs->block_size;
 
         while(ptr < end)
         {
@@ -308,7 +355,7 @@ static int ext2_walk_directory(inode_t *ip, size_t seek, void *data, const char 
                 continue;
             }
 
-            status = ext2_read_inode(fs, &i_ent, dent->inode);
+            status = ext2_read_inode(ctx, &i_ent, dent->inode);
             if(status < 0)
             {
                 return status;
@@ -340,17 +387,14 @@ static int ext2_walk_directory(inode_t *ip, size_t seek, void *data, const char 
     return 0;
 }
 
-static int ext2_read(file_t *file, size_t size, void *buf)
+static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 {
-    autofree(void) *tmpbuf = 0;
-    ext2_inode_t ip;
     size_t fsize, fstart, esize;
     size_t offset, whole;
+    ext2_inode_t ip;
     ext2_t *fs;
     int status;
     long block;
-
-    fs = file->inode->data;
 
     // (offset, whole) are in units of blocks
     // (fsize, fstart, esize) are in units of bytes
@@ -364,6 +408,9 @@ static int ext2_read(file_t *file, size_t size, void *buf)
     {
         return 0;
     }
+
+    fs = file->inode->data;
+    ext2_read_inode(ctx, &ip, file->inode->ino);
 
     offset = (file->seek / fs->block_size);
     fstart = (file->seek % fs->block_size);
@@ -384,52 +431,62 @@ static int ext2_read(file_t *file, size_t size, void *buf)
     whole = (size - fsize) / fs->block_size;
     esize = (size - fsize) % fs->block_size;
 
-    ext2_read_inode(fs, &ip, file->inode->ino);
-
-    tmpbuf = kmalloc(fs->block_size);
-    if(!tmpbuf)
-    {
-        return -ENOMEM;
-    }
-
     if(fsize)
     {
-        block = ext2_inode_block(fs, &ip, offset);
-        status = ext2_read_block(fs, block, tmpbuf);
+        block = ext2_inode_block(ctx, &ip, offset);
+        status = ext2_read_block(fs, block, ctx->tmp_data);
         if(status < 0)
         {
             return status;
         }
-        memcpy(buf, tmpbuf + fstart, fsize);
+        memcpy(buf, ctx->tmp_data + fstart, fsize);
         buf += fsize;
         offset++;
     }
 
     while(whole--)
     {
-        block = ext2_inode_block(fs, &ip, offset);
-        status = ext2_read_block(fs, block, buf); // This does not work, buf is from user space and not accessible from the libata worker thread
+        block = ext2_inode_block(ctx, &ip, offset);
+        status = ext2_read_block(fs, block, ctx->tmp_data);
         if(status < 0)
         {
             return status;
         }
+        memcpy(buf, ctx->tmp_data, fs->block_size);
         buf += fs->block_size;
         offset++;
     }
 
     if(esize)
     {
-        block = ext2_inode_block(fs, &ip, offset);
-        status = ext2_read_block(fs, block, tmpbuf);
+        block = ext2_inode_block(ctx, &ip, offset);
+        status = ext2_read_block(fs, block, ctx->tmp_data);
         if(status < 0)
         {
             return status;
         }
-        memcpy(buf, tmpbuf, esize);
+        memcpy(buf, ctx->tmp_data, esize);
     }
 
-    file->seek += size;
+    file->seek += size; // move to vfs?
     return size;
+}
+
+static int ext2_read(file_t *file, size_t size, void *buf)
+{
+    ext2_ctx_t *ctx;
+    int status;
+
+    ctx = ext2_ctx_alloc(file->inode->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
+    status = ext2_read_file(ctx, file, size, buf);
+    ext2_ctx_free(ctx);
+
+    return status;
 }
 
 static int ext2_seek(file_t *file, ssize_t offset, int origin)
@@ -461,15 +518,36 @@ static int ext2_seek(file_t *file, ssize_t offset, int origin)
 
 static int ext2_readdir(file_t *file, size_t seek, void *data)
 {
-    return ext2_walk_directory(file->inode, seek, data, 0, 0);
+    ext2_ctx_t *ctx;
+    int status;
+
+    ctx = ext2_ctx_alloc(file->inode->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
+    status = ext2_walk_directory(ctx, file->inode, seek, data, 0, 0);
+    ext2_ctx_free(ctx);
+
+    return status;
 }
 
 static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
 {
+    ext2_ctx_t *ctx;
     int status;
 
+    ctx = ext2_ctx_alloc(ip->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
     inode->flags = 0;
-    status = ext2_walk_directory(ip, 0, 0, name, inode);
+    status = ext2_walk_directory(ctx, ip, 0, 0, name, inode);
+    ext2_ctx_free(ctx);
+
     if(status < 0)
     {
         return status;
@@ -552,8 +630,9 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     fs->bgds_start = 1 + (sb->log_block_size == 0);
     fs->sb = sb;
     fs->dev = dev;
+    fs->ctx = ext2_ctx_alloc(fs);
 
-    ext2_read_inode(fs, &root, 2); // this could in principle also fail
+    ext2_read_inode(fs->ctx, &root, 2); // this could in principle also fail
     entry_to_inode(&root, inode, 2);
 
     kp_info("ext2", "version: ext%d", version);
@@ -570,6 +649,7 @@ static int ext2_umount(void *data)
 {
     ext2_t *fs = data;
     blkdev_close(fs->dev);
+    kfree(fs->ctx);
     kfree(fs);
     return 0;
 }
