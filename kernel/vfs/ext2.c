@@ -51,7 +51,7 @@ static void ext2_ctx_free(ext2_ctx_t *ctx)
     }
 }
 
-static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino)
+static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t blksz)
 {
     int flags, mode;
 
@@ -61,13 +61,15 @@ static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino)
     dp->ino = ino;
     dp->size = sp->size;
     dp->flags = 0;
+    dp->mode = mode;
     dp->links = sp->links;
     dp->atime = sp->atime;
     dp->mtime = sp->ctime;
     dp->ctime = sp->mtime;
     dp->uid = sp->uid;
     dp->gid = sp->gid;
-    dp->mode = mode;
+    dp->blksz = blksz;
+    dp->blocks = (dp->size + blksz - 1) / blksz;
 
     if(flags == 0x04)
     {
@@ -360,10 +362,7 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
             {
                 return status;
             }
-
-            entry_to_inode(&i_ent, &inode, dent->inode);
-            inode.blksz = fs->block_size;
-            inode.blocks = (inode.size + inode.blksz - 1) / inode.blksz;
+            entry_to_inode(&i_ent, &inode, dent->inode, fs->block_size);
 
             if(data)
             {
@@ -574,22 +573,26 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
         return 0;
     }
 
-    sb = kmalloc(1024);
-    if(!sb)
+    fs = kzalloc(sizeof(ext2_t) + 1024);
+    if(!fs)
     {
+        kfree(fs);
         blkdev_close(dev);
         return 0;
     }
+    sb = (void*)(fs+1);
 
     status = blkdev_read(dev, 2, 2, sb);
     if(status < 0)
     {
+        kfree(fs);
         blkdev_close(dev);
         return 0;
     }
 
     if(sb->signature != 0xEF53)
     {
+        kfree(fs);
         blkdev_close(dev);
         return 0;
     }
@@ -612,12 +615,8 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
 
     if(version > 2)
     {
-        return 0;
-    }
-
-    fs = kzalloc(sizeof(ext2_t));
-    if(!fs)
-    {
+        kfree(fs);
+        blkdev_close(dev);
         return 0;
     }
 
@@ -632,8 +631,8 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     fs->dev = dev;
     fs->ctx = ext2_ctx_alloc(fs);
 
-    ext2_read_inode(fs->ctx, &root, 2); // this could in principle also fail
-    entry_to_inode(&root, inode, 2);
+    ext2_read_inode(fs->ctx, &root, 2);
+    entry_to_inode(&root, inode, 2, fs->block_size);
 
     kp_info("ext2", "version: ext%d", version);
     kp_info("ext2", "required: %#04x", sb->features_required); // 0x0002 = Directory entries contain a type field

@@ -7,7 +7,12 @@ char *strerror(int errnum)
     static char buf[32];
     char *str = 0;
 
-    switch(-errnum)
+    if(errnum < 0)
+    {
+        errnum = -errnum;
+    }
+
+    switch(errnum)
     {
         case ENOSYS:
             str = "Invalid system call";

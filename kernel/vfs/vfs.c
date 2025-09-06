@@ -549,6 +549,7 @@ int vfs_fstat(int id, stat_t *stat)
     }
 
     ip = fd->file->inode;
+    stat->ino = ip->ino;
     stat->flags = ip->flags;
     stat->mode = ip->mode;
     stat->uid = ip->uid;
@@ -576,6 +577,7 @@ int vfs_stat(const char *pathname, stat_t *stat)
     }
 
     ip = dp->inode;
+    stat->ino = ip->ino;
     stat->flags = ip->flags;
     stat->mode = ip->mode;
     stat->uid = ip->uid;
@@ -936,15 +938,13 @@ int vfs_mount(const char *source, const char *fstype, const char *target)
         }
 
         dev = dp->inode->obj;
-
-        // TODO: need to check if device is already mounted
-        // we might need some sort of lock/release on block devices
     }
     else
     {
         dev = 0;
     }
 
+    memset(&inode, 0, sizeof(inode_t));
     data = fs->ops->mount(dev, &inode);
     if(data == 0)
     {

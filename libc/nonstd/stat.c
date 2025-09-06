@@ -18,7 +18,7 @@ int stat(const char *path, struct stat *buf)
     if(buf)
     {
         buf->st_dev = 0;
-        buf->st_ino = 0;
+        buf->st_ino = stat.ino;
         buf->st_mode = stat.mode;
         buf->st_nlink = 0;
         buf->st_uid = stat.uid;

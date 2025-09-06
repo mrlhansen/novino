@@ -63,12 +63,16 @@ static void tar2inode(ustar_t *tar, inode_t *inode)
             break;
     }
 
-    inode->size = tar->isize;
-    inode->blksz = 512;
+    inode->ino    = 0;
+    inode->size   = tar->isize;
+    inode->blksz  = 512;
     inode->blocks = (tar->isize + 511) / 512;
-    inode->mode = oct2bin(tar->mode, 8);
-    inode->uid  = oct2bin(tar->uid, 8);
-    inode->gid  = oct2bin(tar->gid, 8);
+    inode->mode   = oct2bin(tar->mode, 8);
+    inode->uid    = oct2bin(tar->uid, 8);
+    inode->gid    = oct2bin(tar->gid, 8);
+    inode->atime  = 0;
+    inode->ctime  = 0;
+    inode->mtime  = oct2bin(tar->mtime, 12);
 }
 
 static int initrd_read(file_t *file, size_t size, void *buf)

@@ -84,6 +84,7 @@ typedef struct {
 
 // File stat
 typedef struct {
+    uint64_t ino;     // Inode number
     uint16_t flags;   // Inode flags
     uint16_t mode;    // Permissions
     uint32_t uid;     // User ID

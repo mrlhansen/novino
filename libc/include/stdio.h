@@ -52,6 +52,9 @@ int fscanf(FILE *fp, const char *fmt, ...);
 int vsscanf(const char *str, const char *fmt, va_list args);
 int vfscanf(FILE *fp, const char *fmt, va_list args);
 
+/* error handling */
+void perror(const char *str);
+
 /* end of file */
 #define EOF (-1)
 
