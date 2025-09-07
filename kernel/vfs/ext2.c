@@ -6,6 +6,10 @@
 #include <kernel/errno.h>
 #include <string.h>
 
+// Maybe read and write should just store blocks in the context
+// When the context is closed, the data is flushed to disk
+// This is used for all "metadata" functions, but not for reading actual file data
+
 static ext2_ctx_t *ext2_ctx_alloc(ext2_t *fs)
 {
     ext2_ctx_t *ctx = fs->ctx;
@@ -85,6 +89,13 @@ static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t
     }
 }
 
+static inline int ext2_write_block(ext2_t *fs, uint32_t block, void *data)
+{
+    kp_info("ext2", "writing block %d", block);
+    block = (block * fs->sectors_per_block);
+    return blkdev_write(fs->dev, block, fs->sectors_per_block, data);
+}
+
 static inline int ext2_read_block(ext2_t *fs, uint32_t block, void *data)
 {
     block = (block * fs->sectors_per_block);
@@ -94,13 +105,18 @@ static inline int ext2_read_block(ext2_t *fs, uint32_t block, void *data)
 static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offset)
 {
     uint32_t ident, block;
-    uint32_t *ptr;
+    uint32_t *ptr, *iblks;
     ext2_t *fs;
     int status;
 
     fs = ctx->fs;
     ptr = ctx->ptr_data;
     ident = inode->block[0];
+
+    iblks = ctx->ptr_iblks;
+    iblks[0] = 0;
+    iblks[1] = 0;
+    iblks[2] = 0;
 
     long direct = 12;
     long singly = (fs->block_size / 4);
@@ -136,6 +152,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 return 0;
             }
 
+            if(!offset)
+            {
+                *iblks++ = block;
+            }
+
             status = ext2_read_block(fs, block, ptr);
             if(status < 0)
             {
@@ -158,6 +179,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!doubly)
+                {
+                    *iblks++ = block;
+                }
+
                 status = ext2_read_block(fs, block, ptr);
                 if(status < 0)
                 {
@@ -168,6 +194,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 if(block == 0)
                 {
                     return 0;
+                }
+
+                if(!singly)
+                {
+                    *iblks++ = block;
                 }
 
                 status = ext2_read_block(fs, block, ptr);
@@ -191,6 +222,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!triply)
+                {
+                    *iblks++ = block;
+                }
+
                 status = ext2_read_block(fs, block, ptr);
                 if(status < 0)
                 {
@@ -203,6 +239,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!doubly)
+                {
+                    *iblks++ = block;
+                }
+
                 status = ext2_read_block(fs, block, ptr);
                 if(status < 0)
                 {
@@ -213,6 +254,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 if(block == 0)
                 {
                     return 0;
+                }
+
+                if(!singly)
+                {
+                    *iblks++ = block;
                 }
 
                 status = ext2_read_block(fs, block, ptr);
@@ -229,19 +275,21 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
     return block;
 }
 
-static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd)
+static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd, void *bmap, void *imap)
 {
     uint32_t block, offset;
+    ext2_bgd_t *table;
     ext2_t *fs;
     int status;
 
     fs = ctx->fs;
+    table = ctx->bgd_data;
     block = fs->bgds_start + (bg / fs->bgds_per_block);
-    offset = (bg % fs->bgds_per_block) * sizeof(ext2_bgd_t);
+    offset = (bg % fs->bgds_per_block);
 
     if(block != ctx->bgd_block)
     {
-        status = ext2_read_block(fs, block, ctx->bgd_data);
+        status = ext2_read_block(fs, block, table);
         if(status < 0)
         {
             return status;
@@ -249,7 +297,77 @@ static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd)
         ctx->bgd_block = block;
     }
 
-    *bgd = *(ext2_bgd_t*)(ctx->bgd_data + offset);
+    *bgd = table[offset];
+
+    if(bmap)
+    {
+        status = ext2_read_block(fs, bgd->block_bitmap, bmap);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+
+    if(imap)
+    {
+        status = ext2_read_block(fs, bgd->inode_bitmap, imap);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+
+    return 0;
+}
+
+static int ext2_write_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd, void *bmap, void *imap)
+{
+    uint32_t block, offset;
+    ext2_bgd_t *table;
+    ext2_t *fs;
+    int status;
+
+    fs = ctx->fs;
+    table = ctx->bgd_data;
+    block = fs->bgds_start + (bg / fs->bgds_per_block);
+    offset = (bg % fs->bgds_per_block);
+
+    if(block != ctx->bgd_block)
+    {
+        status = ext2_read_block(fs, block, table);
+        if(status < 0)
+        {
+            return status;
+        }
+        ctx->bgd_block = block;
+    }
+
+    table[offset] = *bgd;
+
+    status = ext2_write_block(fs, block, table);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    if(bmap)
+    {
+        status = ext2_write_block(fs, bgd->block_bitmap, bmap);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+
+    if(imap)
+    {
+        status = ext2_write_block(fs, bgd->inode_bitmap, imap);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+
     return 0;
 }
 
@@ -269,7 +387,7 @@ static int ext2_read_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t inode)
     block  = (inode * sb->inode_size) / fs->block_size;
     offset = (inode % fs->inodes_per_block) * sb->inode_size;
 
-    status = ext2_read_bgd(ctx, group, &bgd);
+    status = ext2_read_bgd(ctx, group, &bgd, 0, 0);
     if(status < 0)
     {
         return status;
@@ -560,6 +678,187 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
     return 0;
 }
 
+static int ext2_inode_truncate(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t inode;
+    ext2_bgd_t bgd;
+    ext2_t *fs;
+    int count, offset;
+    int status;
+    int bg, block, old_bg;
+    uint8_t *bitmap;
+    uint32_t *iblks, icnt;
+
+    status = ext2_read_inode(ctx, &inode, ino);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    fs = ctx->fs;
+    count = (inode.sectors / fs->sectors_per_block);
+    bitmap = ctx->tmp_data;
+    block = inode.block[0];
+
+    if(block == 0)
+    {
+        return 0;
+    }
+
+    icnt  = 0;
+    iblks = kcalloc(count, sizeof(*iblks)); // autofree?
+    if(!iblks)
+    {
+        return -ENOMEM;
+    }
+
+    bg = (block - 1) / fs->sb->blocks_per_group; // -1 might be dynamic: sb->first_data_block ?
+    old_bg = bg;
+
+    status = ext2_read_bgd(ctx, bg, &bgd, bitmap, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    for(int i = 0; i < count; i++)
+    {
+        block = ext2_inode_block(ctx, &inode, i);
+        if(block == 0)
+        {
+            count = i;
+            break;
+        }
+        bg = (block - 1) / fs->sb->blocks_per_group;
+
+        for(int i = 0; i < 3; i++)
+        {
+            if(ctx->ptr_iblks[i])
+            {
+                iblks[icnt++] = ctx->ptr_iblks[i];
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if(bg != old_bg)
+        {
+            status = ext2_write_bgd(ctx, old_bg, &bgd, bitmap, 0);
+            if(status < 0)
+            {
+                return status;
+            }
+
+            status = ext2_read_bgd(ctx, bg, &bgd, bitmap, 0);
+            if(status < 0)
+            {
+                return status;
+            }
+
+            old_bg = bg;
+        }
+
+        offset = (block - 1) % fs->sb->blocks_per_group;
+        bitmap[offset / 8] &= ~(1 << (offset % 8));
+        bgd.free_blocks++;
+    }
+
+    for(int i = 0; i < icnt; i++)
+    {
+        block = iblks[i];
+        bg = (block - 1) / fs->sb->blocks_per_group;
+
+        if(bg != old_bg)
+        {
+            status = ext2_write_bgd(ctx, old_bg, &bgd, bitmap, 0);
+            if(status < 0)
+            {
+                return status;
+            }
+
+            status = ext2_read_bgd(ctx, bg, &bgd, bitmap, 0);
+            if(status < 0)
+            {
+                return status;
+            }
+
+            old_bg = bg;
+        }
+
+        offset = (block - 1) % fs->sb->blocks_per_group;
+        bitmap[offset / 8] &= ~(1 << (offset % 8));
+        bgd.free_blocks++;
+    }
+
+    status = ext2_write_bgd(ctx, bg, &bgd, bitmap, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    // update inode
+    inode.sectors = 0;
+    for(int i = 0; i < 15; i++)
+    {
+        inode.block[i] = 0;
+    }
+
+    kfree(iblks); // autofree?
+    return 0;
+}
+
+static int ext2_inode_free(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t inode;
+    ext2_bgd_t bgd;
+    ext2_t *fs;
+    int status, bg;
+    uint8_t *bitmap;
+
+    status = ext2_read_inode(ctx, &inode, ino);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    fs = ctx->fs;
+    bitmap = ctx->tmp_data;
+    bg = (ino - 1) / fs->sb->inodes_per_group;
+
+    status = ext2_write_bgd(ctx, bg, &bgd, 0, bitmap);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    return 0;
+}
+
+static int ext2_unlink(inode_t *ip, dentry_t *dp)
+{
+    ext2_ctx_t *ctx;
+    int status;
+
+    kp_info("ext2", "unlinking >%s< in parent dir with ino %d", dp->name, ip->ino);
+
+    ctx = ext2_ctx_alloc(ip->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
+    // there are two parts to this
+    // removing the dirent
+    // removing the inode, if # links is zero
+    // deleting the inode itself, and truncating all blocks
+    ext2_inode_truncate(ctx, dp->inode->ino);
+    ext2_inode_free(ctx, dp->inode->ino);
+
+    return 0;
+}
+
 static void *ext2_mount(devfs_t *dev, inode_t *inode)
 {
     int version, status;
@@ -664,6 +963,7 @@ void ext2_init()
         .ioctl = 0,
         .readdir = ext2_readdir,
         .lookup = ext2_lookup,
+        .unlink = ext2_unlink,
         .mount = ext2_mount,
         .umount = ext2_umount
     };

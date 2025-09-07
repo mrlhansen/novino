@@ -118,6 +118,7 @@ typedef struct {
     uint32_t ino_block;
     uint32_t ptr_ident;
     uint32_t ptr_block;
+    uint32_t ptr_iblks[3];
     void *bgd_data;
     void *ino_data;
     void *ptr_data;
