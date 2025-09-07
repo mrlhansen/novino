@@ -112,21 +112,22 @@ typedef struct {
 } ext2_t;
 
 typedef struct {
-    uint32_t block;
-    bool dirty;
-    link_t link;
-    void *data;
+    uint32_t block; // Block number
+    bool dirty;     // Block has been modified
+    link_t link;    // Link to next block
+    void *data;     // Block data
 } ext2_blk_t;
 
 typedef struct {
-    ext2_t *fs;
-    lock_t lock;
-    list_t list;
-    int errno;
-    uint32_t ptr_ident;
-    uint32_t ptr_block;
-    void *ptr_data;
-    void *blkbuf;
+    ext2_t *fs;          // Context filesystem
+    lock_t lock;         // Context lock
+    list_t list;         // List of cached blocks
+    int errno;           // Propagated error code
+    size_t ptr_links[3]; // Blocks used for indirect pointers
+    size_t ptr_ident;    // Cached lookup in ext2_inode_block
+    size_t ptr_block;    // Cached lookup in ext2_inode_block
+    void *ptr_data;      // Cached lookup in ext2_inode_block
+    void *blkbuf;        // Generic block buffer
 } ext2_ctx_t;
 
 void ext2_init();

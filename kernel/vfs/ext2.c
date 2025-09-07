@@ -140,7 +140,7 @@ static void ext2_ctx_free(ext2_ctx_t *ctx)
     {
         if(item->dirty)
         {
-            ext2_write_direct(ctx->fs, item->block, item->data);
+            ext2_write_direct(ctx->fs, item->block, item->data); // can return an error!
         }
         kfree(item);
     }
@@ -189,15 +189,20 @@ static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t
     }
 }
 
-static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offset)
+static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offset) // use ctx->errno here as well? and size_t as return?
 {
-    uint32_t ident, block;
-    uint32_t *ptr;
+    uint32_t ident, block, *ptr;
+    size_t *links;
     ext2_t *fs;
 
     fs = ctx->fs;
     ptr = ctx->ptr_data;
     ident = inode->block[0];
+
+    links = ctx->ptr_links;
+    links[0] = 0;
+    links[1] = 0;
+    links[2] = 0;
 
     long direct = 12;
     long singly = (fs->block_size / 4);
@@ -233,6 +238,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 return 0;
             }
 
+            if(!offset)
+            {
+                *links++ = block;
+            }
+
             ptr = ext2_read_cached(ctx, block);
             if(!ptr)
             {
@@ -256,6 +266,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!doubly)
+                {
+                    *links++ = block;
+                }
+
                 ptr = ext2_read_cached(ctx, block);
                 if(!ptr)
                 {
@@ -266,6 +281,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 if(block == 0)
                 {
                     return 0;
+                }
+
+                if(!singly)
+                {
+                    *links++ = block;
                 }
 
                 ptr = ext2_read_cached(ctx, block);
@@ -290,6 +310,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!triply)
+                {
+                    *links++ = block;
+                }
+
                 ptr = ext2_read_cached(ctx, block);
                 if(!ptr)
                 {
@@ -302,6 +327,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     return 0;
                 }
 
+                if(!doubly)
+                {
+                    *links++ = block;
+                }
+
                 ptr = ext2_read_cached(ctx, block);
                 if(!ptr)
                 {
@@ -312,6 +342,11 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 if(block == 0)
                 {
                     return 0;
+                }
+
+                if(!singly)
+                {
+                    *links++ = block;
                 }
 
                 ptr = ext2_read_cached(ctx, block);
@@ -329,7 +364,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
     return block;
 }
 
-static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd)
+static int ext2_rw_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd, bool write)
 {
     uint32_t block, offset;
     ext2_bgd_t *table;
@@ -345,11 +380,20 @@ static int ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd)
         return ctx->errno;
     }
 
-    *bgd = table[offset];
+    if(write)
+    {
+        table[offset] = *bgd;
+        ext2_write_cached(ctx, block);
+    }
+    else
+    {
+        *bgd = table[offset];
+    }
+
     return 0;
 }
 
-static int ext2_read_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t inode)
+static int ext2_rw_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t ino, bool write)
 {
     uint32_t group, block, offset;
     ext2_inode_t *table;
@@ -360,25 +404,36 @@ static int ext2_read_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t inode)
 
     fs = ctx->fs;
     sb = fs->sb;
+    bgd.inode_table = 0; // squash false warning
 
-    group  = (inode - 1) / sb->inodes_per_group;
-    inode  = (inode - 1) % sb->inodes_per_group;
-    block  = (inode * sb->inode_size) / fs->block_size;
-    offset = inode % fs->inodes_per_block;
+    group  = (ino - 1) / sb->inodes_per_group;
+    ino    = (ino - 1) % sb->inodes_per_group;
+    block  = (ino * sb->inode_size) / fs->block_size;
+    offset = ino % fs->inodes_per_block;
 
-    status = ext2_read_bgd(ctx, group, &bgd);
+    status = ext2_rw_bgd(ctx, group, &bgd, false);
     if(status < 0)
     {
         return status;
     }
 
-    table = ext2_read_cached(ctx, block + bgd.inode_table);
+    block = block + bgd.inode_table;
+    table = ext2_read_cached(ctx, block);
     if(!table)
     {
         return ctx->errno;
     }
 
-    *ip = table[offset];
+    if(write)
+    {
+        table[offset] = *ip;
+        ext2_write_cached(ctx, block);
+    }
+    else
+    {
+        *ip = table[offset];
+    }
+
     return 0;
 }
 
@@ -394,7 +449,7 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
     char filename[256];
 
     fs = ctx->fs;
-    status = ext2_read_inode(ctx, &i_dir, ip->ino);
+    status = ext2_rw_inode(ctx, &i_dir, ip->ino, false);
     if(status < 0)
     {
         return status;
@@ -447,7 +502,7 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
                 continue;
             }
 
-            status = ext2_read_inode(ctx, &i_ent, dent->inode);
+            status = ext2_rw_inode(ctx, &i_ent, dent->inode, false);
             if(status < 0)
             {
                 return status;
@@ -499,9 +554,13 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
         return 0;
     }
 
-    fs = file->inode->data;
-    ext2_read_inode(ctx, &ip, file->inode->ino);
+    status = ext2_rw_inode(ctx, &ip, file->inode->ino, false);
+    if(status < 0)
+    {
+        return status;
+    }
 
+    fs = file->inode->data;
     offset = (file->seek / fs->block_size);
     fstart = (file->seek % fs->block_size);
 
@@ -723,7 +782,7 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     fs->dev = dev;
     fs->ctx = ext2_ctx_alloc(fs);
 
-    ext2_read_inode(fs->ctx, &root, 2);
+    ext2_rw_inode(fs->ctx, &root, 2, false);
     entry_to_inode(&root, inode, 2, fs->block_size);
 
     kp_info("ext2", "version: ext%d", version);
