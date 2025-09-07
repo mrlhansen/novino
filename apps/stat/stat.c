@@ -25,6 +25,7 @@ int main(int argc, char *argv[])
 
     printf("File   : %s\n", argv[1]);
     printf("Size   : %d\n", st.st_size);
+    printf("Mode   : %#o\n", st.st_mode);
     printf("Blocks : %d x %d\n", st.st_blocks, st.st_blksize);
     printf("Inode  : %d\n", st.st_ino);
     printf("UID    : %d\n", st.st_uid);

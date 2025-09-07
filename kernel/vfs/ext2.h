@@ -1,8 +1,8 @@
 #pragma once
 
 #include <kernel/vfs/devfs.h>
-#include <kernel/types.h>
 #include <kernel/atomic.h>
+#include <kernel/lists.h>
 
 // ext2 superblock
 typedef struct {
@@ -112,16 +112,21 @@ typedef struct {
 } ext2_t;
 
 typedef struct {
-    lock_t lock;
+    uint32_t block;
+    bool dirty;
+    link_t link;
+    void *data;
+} ext2_blk_t;
+
+typedef struct {
     ext2_t *fs;
-    uint32_t bgd_block;
-    uint32_t ino_block;
+    lock_t lock;
+    list_t list;
+    int errno;
     uint32_t ptr_ident;
     uint32_t ptr_block;
-    void *bgd_data;
-    void *ino_data;
     void *ptr_data;
-    void *tmp_data;
+    void *blkbuf;
 } ext2_ctx_t;
 
 void ext2_init();

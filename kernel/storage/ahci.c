@@ -451,7 +451,7 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
     fis.count = count;
 
     prd.phys = dev->dma.phys;
-    prd.size = 512 * count;
+    prd.size = dev->disk.lss * count; // TODO: we might need multiple PRDs
     prd.ioc = 1;
 
     dev->irq.type = PxIS_DHRS;
@@ -473,6 +473,8 @@ static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
 {
     ahci_dev_t *dev = dp;
     int status;
+
+    // TODO: take dma buffer size into account
 
     if(dev->atapi)
     {
@@ -496,6 +498,27 @@ static int ahci_read(void *data, size_t lba, size_t count, void *buf)
 {
     ahci_dev_t *dev = data;
     return libata_queue(&dev->wk, dev, 0, lba, count, buf);
+}
+
+static int ahci_write_core(void *dp, size_t lba, size_t count, void *buf)
+{
+    ahci_dev_t *dev = dp;
+
+    // TODO: take dma buffer size into account
+
+    if(dev->atapi)
+    {
+        return -EIO;
+    }
+
+    memcpy((void*)dev->dma.virt, buf, dev->disk.lss * count);
+    return ahci_rw_dma(dev, 1, lba, count);
+}
+
+static int ahci_write(void *data, size_t lba, size_t count, void *buf)
+{
+    ahci_dev_t *dev = data;
+    return libata_queue(&dev->wk, dev, 1, lba, count, buf);
 }
 
 static int ahci_status(void *data, blkdev_t *blk, int ack)
@@ -651,7 +674,7 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     // Setup worker thread
     dev->irq.signal = 0;
     dev->wk.read = ahci_read_core;
-    dev->wk.write = 0;
+    dev->wk.write = ahci_write_core;
     sprintf(name, "ahci%d.%d", dev->host->bus, dev->id);
     libata_start_worker(&dev->wk, name);
 
@@ -659,7 +682,7 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
     static devfs_blk_t ops = {
         .status = ahci_status,
         .read = ahci_read,
-        .write = 0,
+        .write = ahci_write,
     };
 
     sprintf(name, "disk%d", dev->id);
