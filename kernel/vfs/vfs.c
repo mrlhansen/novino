@@ -892,6 +892,29 @@ int vfs_close(int id)
     return status;
 }
 
+int vfs_unlink(const char *pathname)
+{
+    vfs_fs_t *fs;
+    dentry_t *dp;
+    int status;
+
+    status = vfs_walk_path(pathname, &dp);
+    if(status < 0)
+    {
+        return status;
+    }
+
+
+    fs = dp->inode->fs;
+
+    if(fs->ops->unlink == 0)
+    {
+        return -EROFS; // not sure about this? ENOTSUP?
+    }
+
+    return fs->ops->unlink(dp->parent->inode, dp);
+}
+
 int vfs_mount(const char *source, const char *fstype, const char *target)
 {
     vfs_mp_t *mp;

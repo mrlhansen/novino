@@ -586,6 +586,7 @@ int main(int argc, char *argv[])
     int count;
     int status;
 
+    // chdir("/devices/ahci0");
     setpwd();
 
     hist_max = 100;

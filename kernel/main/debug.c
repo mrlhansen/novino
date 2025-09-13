@@ -5,7 +5,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-static int verbose = 0;
+static int verbose = 1;
 
 void kprint(loglevel_t level, const char *name, const char *file, int line, const char *fmt, ...)
 {

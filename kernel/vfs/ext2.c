@@ -13,7 +13,14 @@ static inline int ext2_read_direct(ext2_t *fs, uint32_t block, void *data)
     return blkdev_read(fs->dev, block, fs->sectors_per_block, data);
 }
 
-static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block)
+static inline int ext2_write_direct(ext2_t *fs, uint32_t block, void *data)
+{
+    kp_info("ext2", "direct write %d", block);
+    block = (block * fs->sectors_per_block);
+    return blkdev_write(fs->dev, block, fs->sectors_per_block, data);
+}
+
+static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block, bool dirty)
 {
     ext2_blk_t *item, *curr;
     ext2_t *fs = ctx->fs;
@@ -25,6 +32,10 @@ static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block)
     {
         if(item->block == block)
         {
+            if(dirty)
+            {
+                item->dirty = true;
+            }
             return item->data;
         }
         if(item->block > block)
@@ -46,7 +57,7 @@ static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block)
     }
 
     item->block = block;
-    item->dirty = false;
+    item->dirty = dirty;
     item->data  = (void*)(item+1);
 
     if(curr)
@@ -67,37 +78,6 @@ static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block)
     }
 
     return item->data;
-}
-
-static inline int ext2_write_direct(ext2_t *fs, uint32_t block, void *data)
-{
-    kp_info("ext2", "direct write %d", block);
-    block = (block * fs->sectors_per_block);
-    return blkdev_write(fs->dev, block, fs->sectors_per_block, data);
-}
-
-static void ext2_write_cached(ext2_ctx_t *ctx, uint32_t block)
-{
-    ext2_blk_t *item;
-
-    item = ctx->list.head;
-    while(item)
-    {
-        if(item->block >= block)
-        {
-            break;
-        }
-        item = item->link.next;
-    }
-
-    if(item->block == block)
-    {
-        item->dirty = true;
-        return;
-    }
-
-    kp_panic("ext2", "ext2_write_cached: unknown block!");
-    while(1);
 }
 
 static ext2_ctx_t *ext2_ctx_alloc(ext2_t *fs)
@@ -122,12 +102,8 @@ static ext2_ctx_t *ext2_ctx_alloc(ext2_t *fs)
     }
 
     ctx->fs = fs;
+    ctx->blkbuf = ctx + 1;
     list_init(&ctx->list, offsetof(ext2_blk_t, link));
-
-    ctx->ptr_ident = 0;
-    ctx->ptr_block = 0;
-    ctx->ptr_data  = 0;
-    ctx->blkbuf    = ctx + 1;
 
     return ctx;
 }
@@ -138,7 +114,7 @@ static void ext2_ctx_free(ext2_ctx_t *ctx)
 
     while(item = list_pop(&ctx->list), item)
     {
-        if(item->dirty)
+        if(item->dirty) // if ctx->errno is set, we do not write anything
         {
             ext2_write_direct(ctx->fs, item->block, item->data); // can return an error!
         }
@@ -155,7 +131,7 @@ static void ext2_ctx_free(ext2_ctx_t *ctx)
     }
 }
 
-static void entry_to_inode(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t blksz)
+static void ext2_inode_convert(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t blksz)
 {
     int flags, mode;
 
@@ -243,7 +219,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                 *links++ = block;
             }
 
-            ptr = ext2_read_cached(ctx, block);
+            ptr = ext2_read_cached(ctx, block, false);
             if(!ptr)
             {
                 return ctx->errno;
@@ -271,7 +247,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     *links++ = block;
                 }
 
-                ptr = ext2_read_cached(ctx, block);
+                ptr = ext2_read_cached(ctx, block, false);
                 if(!ptr)
                 {
                     return ctx->errno;
@@ -288,7 +264,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     *links++ = block;
                 }
 
-                ptr = ext2_read_cached(ctx, block);
+                ptr = ext2_read_cached(ctx, block, false);
                 if(!ptr)
                 {
                     return ctx->errno;
@@ -315,7 +291,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     *links++ = block;
                 }
 
-                ptr = ext2_read_cached(ctx, block);
+                ptr = ext2_read_cached(ctx, block, false);
                 if(!ptr)
                 {
                     return ctx->errno;
@@ -332,7 +308,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     *links++ = block;
                 }
 
-                ptr = ext2_read_cached(ctx, block);
+                ptr = ext2_read_cached(ctx, block, false);
                 if(!ptr)
                 {
                     return ctx->errno;
@@ -349,7 +325,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
                     *links++ = block;
                 }
 
-                ptr = ext2_read_cached(ctx, block);
+                ptr = ext2_read_cached(ctx, block, false);
                 if(!ptr)
                 {
                     return ctx->errno;
@@ -364,7 +340,7 @@ static long ext2_inode_block(ext2_ctx_t *ctx, ext2_inode_t *inode, uint32_t offs
     return block;
 }
 
-static int ext2_rw_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd, bool write)
+static ext2_bgd_t *ext2_read_bgd(ext2_ctx_t *ctx, uint32_t bg, int dirty)
 {
     uint32_t block, offset;
     ext2_bgd_t *table;
@@ -374,72 +350,49 @@ static int ext2_rw_bgd(ext2_ctx_t *ctx, uint32_t bg, ext2_bgd_t *bgd, bool write
     block = fs->bgds_start + (bg / fs->bgds_per_block);
     offset = bg % fs->bgds_per_block;
 
-    table = ext2_read_cached(ctx, block);
+    table = ext2_read_cached(ctx, block, dirty);
     if(!table)
     {
-        return ctx->errno;
+        return 0;
     }
 
-    if(write)
-    {
-        table[offset] = *bgd;
-        ext2_write_cached(ctx, block);
-    }
-    else
-    {
-        *bgd = table[offset];
-    }
-
-    return 0;
+    return table + offset;
 }
 
-static int ext2_rw_inode(ext2_ctx_t *ctx, ext2_inode_t *ip, uint32_t ino, bool write)
+static ext2_inode_t *ext2_read_inode(ext2_ctx_t *ctx, uint32_t ino, int dirty)
 {
-    uint32_t group, block, offset;
+    uint32_t bg, block, offset;
     ext2_inode_t *table;
-    ext2_bgd_t bgd;
+    ext2_bgd_t *bgd;
     ext2_sb_t *sb;
     ext2_t *fs;
-    int status;
 
     fs = ctx->fs;
     sb = fs->sb;
-    bgd.inode_table = 0; // squash false warning
 
-    group  = (ino - 1) / sb->inodes_per_group;
+    bg     = (ino - 1) / sb->inodes_per_group;
     ino    = (ino - 1) % sb->inodes_per_group;
     block  = (ino * sb->inode_size) / fs->block_size;
     offset = ino % fs->inodes_per_block;
 
-    status = ext2_rw_bgd(ctx, group, &bgd, false);
-    if(status < 0)
+    bgd = ext2_read_bgd(ctx, bg, false);
+    if(!bgd)
     {
-        return status;
+        return 0;
     }
 
-    block = block + bgd.inode_table;
-    table = ext2_read_cached(ctx, block);
+    table = ext2_read_cached(ctx, block + bgd->inode_table, dirty);
     if(!table)
     {
-        return ctx->errno;
+        return 0;
     }
 
-    if(write)
-    {
-        table[offset] = *ip;
-        ext2_write_cached(ctx, block);
-    }
-    else
-    {
-        *ip = table[offset];
-    }
-
-    return 0;
+    return table + offset;
 }
 
-static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *data, const char *lookup_name, inode_t *lookup_inode)
+static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *data, ext2_lookup_t *lookup)
 {
-    ext2_inode_t i_dir, i_ent;
+    ext2_inode_t *i_dir, *i_ent;
     ext2_dentry_t *dent;
     inode_t inode;
     int count, status;
@@ -448,23 +401,24 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
     long block;
     char filename[256];
 
-    fs = ctx->fs;
-    status = ext2_rw_inode(ctx, &i_dir, ip->ino, false);
-    if(status < 0)
+    i_dir = ext2_read_inode(ctx, ip->ino, false);
+    if(!i_dir)
     {
-        return status;
+        return ctx->errno;
     }
-    count = (i_dir.sectors / fs->sectors_per_block);
+
+    fs = ctx->fs;
+    count = i_dir->size / fs->block_size;
 
     for(int i = 0; i < count; i++)
     {
-        block = ext2_inode_block(ctx, &i_dir, i);
+        block = ext2_inode_block(ctx, i_dir, i);
         if(block < 1)
         {
             return block;
         }
 
-        ptr = ext2_read_cached(ctx, block);
+        ptr = ext2_read_cached(ctx, block, false);
         if(!ptr)
         {
             return ctx->errno;
@@ -502,27 +456,32 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
                 continue;
             }
 
-            status = ext2_rw_inode(ctx, &i_ent, dent->inode, false);
-            if(status < 0)
+            i_ent = ext2_read_inode(ctx, dent->inode, false);
+            if(!i_ent)
             {
-                return status;
+                return ctx->errno;
             }
-            entry_to_inode(&i_ent, &inode, dent->inode, fs->block_size);
+            ext2_inode_convert(i_ent, &inode, dent->inode, fs->block_size);
 
             if(data)
             {
-                status = vfs_put_dirent(data, filename, &inode);
+                status = vfs_put_dirent(data, filename, &inode); // if we want to store some sort of offset, we should store the block number
                 if(status < 0)
                 {
                     return 0;
                 }
             }
-            else if(lookup_name)
+            else if(lookup)
             {
-                if(strcmp(filename, lookup_name) == 0)
+                if(strcmp(filename, lookup->name) == 0)
                 {
-                    *lookup_inode = inode;
-                    break;
+                    if(lookup->inode)
+                    {
+                        lookup->inode[0] = inode;
+                    }
+                    lookup->dent = dent;
+                    lookup->block = block;
+                    return 0;
                 }
             }
         }
@@ -531,11 +490,114 @@ static int ext2_walk_directory(ext2_ctx_t *ctx, inode_t *ip, size_t seek, void *
     return 0;
 }
 
+static int ext2_dirent_init(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t *ip;
+    ext2_iter_t *it;
+    uint32_t block;
+    ext2_t *fs;
+    void *ptr;
+    int status;
+
+    it = &ctx->iter;
+    fs = ctx->fs;
+
+    ip = ext2_read_inode(ctx, ino, false);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    block = ext2_inode_block(ctx, ip, 0);
+    if(block < 0)
+    {
+        return status;
+    }
+
+    ptr = ext2_read_cached(ctx, block, false);
+    if(!ptr)
+    {
+        return ctx->errno;
+    }
+
+    it->offset = 0;
+    it->count  = ip->size / fs->block_size;
+    it->block  = block;
+    it->ptr    = ptr;
+    it->end    = ptr + ctx->fs->block_size;
+    it->ip     = ip;
+
+    return 0;
+}
+
+static ext2_dentry_t *ext2_dirent_next(ext2_ctx_t *ctx, uint32_t *block, char *filename)
+{
+    uint32_t status;
+    ext2_dentry_t *dp;
+    ext2_iter_t *it;
+    ext2_t *fs;
+    void *ptr;
+
+    fs   = ctx->fs;
+    it   = &ctx->iter;
+    dp   = it->ptr;
+
+    if(!dp)
+    {
+        return 0;
+    }
+
+    ptr = it->ptr + dp->size;
+
+    if(ptr >= it->end)
+    {
+        it->ptr = 0;
+        it->offset++;
+
+        if(it->offset < it->count)
+        {
+            status = ext2_inode_block(ctx, it->ip, it->offset);
+            if(status < 1)
+            {
+                ctx->errno = status;
+                return 0;
+            }
+
+            ptr = ext2_read_cached(ctx, status, false);
+            if(!ptr)
+            {
+                return 0;
+            }
+
+            it->ptr   = ptr;
+            it->end   = ptr + fs->block_size;
+            it->block = status;
+        }
+    }
+    else
+    {
+        it->ptr = ptr;
+    }
+
+    if(block)
+    {
+        *block = it->block;
+    }
+
+    if(filename)
+    {
+        strncpy(filename, dp->name, dp->length);
+        filename[dp->length] = '\0';
+    }
+
+    return dp;
+}
+
 static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 {
     size_t fsize, fstart, esize;
     size_t offset, whole;
-    ext2_inode_t ip;
+    ext2_inode_t *ip;
     ext2_t *fs;
     void *blkbuf;
     int status;
@@ -554,10 +616,10 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
         return 0;
     }
 
-    status = ext2_rw_inode(ctx, &ip, file->inode->ino, false);
-    if(status < 0)
+    ip = ext2_read_inode(ctx, file->inode->ino, false);
+    if(!ip)
     {
-        return status;
+        return ctx->errno;
     }
 
     fs = file->inode->data;
@@ -583,7 +645,7 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 
     if(fsize)
     {
-        block = ext2_inode_block(ctx, &ip, offset);
+        block = ext2_inode_block(ctx, ip, offset);
         status = ext2_read_direct(fs, block, blkbuf);
         if(status < 0)
         {
@@ -596,7 +658,7 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 
     while(whole--)
     {
-        block = ext2_inode_block(ctx, &ip, offset);
+        block = ext2_inode_block(ctx, ip, offset);
         status = ext2_read_direct(fs, block, blkbuf);
         if(status < 0)
         {
@@ -609,7 +671,7 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 
     if(esize)
     {
-        block = ext2_inode_block(ctx, &ip, offset);
+        block = ext2_inode_block(ctx, ip, offset);
         status = ext2_read_direct(fs, block, blkbuf);
         if(status < 0)
         {
@@ -677,7 +739,7 @@ static int ext2_readdir(file_t *file, size_t seek, void *data)
         return -ENOMEM;
     }
 
-    status = ext2_walk_directory(ctx, file->inode, seek, data, 0, 0);
+    status = ext2_walk_directory(ctx, file->inode, seek, data, 0);
     ext2_ctx_free(ctx);
 
     return status;
@@ -694,8 +756,14 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
         return -ENOMEM;
     }
 
-    inode->flags = 0;
-    status = ext2_walk_directory(ctx, ip, 0, 0, name, inode);
+    ext2_lookup_t lookup = {
+        .name = name,
+        .inode = inode,
+        .dent = 0,
+        .block = 0,
+    };
+
+    status = ext2_walk_directory(ctx, ip, 0, 0, &lookup);
     ext2_ctx_free(ctx);
 
     if(status < 0)
@@ -703,7 +771,7 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
         return status;
     }
 
-    if(inode->flags == 0)
+    if(lookup.block == 0)
     {
         return -ENOENT;
     }
@@ -711,10 +779,261 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
     return 0;
 }
 
+static int ext2_free_blocks(ext2_ctx_t *ctx, uint32_t start, uint32_t count)
+{
+    ext2_bgd_t *bgd;
+    ext2_sb_t *sb;
+    uint8_t *bitmap;
+    int offset, bit;
+    int bg, pos;
+    int status;
+
+    kp_info("ext2", "freeing %d blocks from %d-%d", count, start, start+count-1);
+
+    sb  = ctx->fs->sb;
+    bg  = (start - 1) / sb->blocks_per_group; // -1 might be dynamic: sb->first_data_block ?
+    pos = (start - 1) % sb->blocks_per_group;
+
+    bgd = ext2_read_bgd(ctx, bg, true);
+    if(!bgd)
+    {
+        return ctx->errno;
+    }
+
+    bitmap = ext2_read_cached(ctx, bgd->block_bitmap, true);
+    if(!bitmap)
+    {
+        return ctx->errno;
+    }
+
+    for(int i = 0; i < count; i++)
+    {
+        offset = pos / 8;
+        bit = pos % 8;
+
+        bitmap[offset] &= ~(1 << bit);
+        bgd->free_blocks++;
+        pos++;
+    }
+
+    // update superblock count
+
+    return 0;
+}
+
+static int ext2_inode_truncate(ext2_ctx_t *ctx, uint32_t ino) //
+{
+    ext2_inode_t *ip;
+    ext2_t *fs;
+    int count;
+    int status;
+    int block, prev, start;
+    size_t *links, nlinks;
+
+    ip = ext2_read_inode(ctx, ino, true);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    fs     = ctx->fs;
+    count  = (ip->sectors / fs->sectors_per_block);
+    block  = ip->block[0];
+    start  = block;
+    prev   = block;
+    links  = ctx->blkbuf;
+    nlinks = 0;
+
+    if(block == 0)
+    {
+        return 0;
+    }
+
+    // free data blocks
+    for(int i = 1; i < count; i++)
+    {
+        block = ext2_inode_block(ctx, ip, i);
+        if(block == 0)
+        {
+            count = i;
+            break;
+        }
+
+        for(int i = 0; i < 3; i++)
+        {
+            if(ctx->ptr_links[i])
+            {
+                links[nlinks] = ctx->ptr_links[i];
+                nlinks++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if(block != prev + 1)
+        {
+            ext2_free_blocks(ctx, start, prev - start + 1);
+            start = block;
+        }
+
+        prev = block;
+    }
+
+    ext2_free_blocks(ctx, start, prev - start + 1);
+
+    // free indirect blocks
+    if(nlinks)
+    {
+        block = links[0];
+        start = block;
+        prev  = block;
+
+        for(int i = 1; i < nlinks; i++)
+        {
+            block = links[i];
+            if(block != prev + 1)
+            {
+                ext2_free_blocks(ctx, start, prev - start + 1);
+                start = block;
+            }
+            prev = block;
+        }
+
+        ext2_free_blocks(ctx, start, prev - start + 1);
+    }
+
+    // update inode
+    ip->sectors = 0;
+    ip->ctime = 0; // system_timestamp() ?
+
+    for(int i = 0; i < 15; i++)
+    {
+        ip->block[i] = 0;
+    }
+
+    return 0;
+}
+
+static int ext2_inode_free(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t *ip;
+    ext2_bgd_t *bgd;
+    ext2_sb_t *sb;
+    int status, bg, pos;
+    uint8_t *bitmap;
+
+    ip = ext2_read_inode(ctx, ino, true);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    sb  = ctx->fs->sb;
+    bg  = (ino - 1) / sb->inodes_per_group;
+    pos = (ino - 1) % sb->blocks_per_group;
+
+    bgd = ext2_read_bgd(ctx, bg, true);
+    if(!bgd)
+    {
+        return ctx->errno;
+    }
+
+    bitmap = ext2_read_cached(ctx, bgd->inode_bitmap, true);
+    if(!bitmap)
+    {
+        return ctx->errno;
+    }
+
+    bitmap[pos / 8] &= ~(1 << (pos % 8));
+    bgd->free_inodes++;
+    ip->dtime = 0;
+
+    // update superblock count
+
+    return 0;
+}
+
+static int ext2_dirent_free(ext2_ctx_t *ctx, uint32_t ino, const char *name)
+{
+    ext2_dentry_t *dent;
+    uint32_t block;
+    char filename[256];
+    int status;
+
+    status = ext2_dirent_init(ctx, ino);
+    if(status < 0)
+    {
+        // something
+    }
+    while(dent = ext2_dirent_next(ctx, &block, filename), dent)
+    {
+        kp_info("ext2","???? %s",filename);
+        if(strcmp(name, filename) == 0)
+        {
+            kp_info("ext2","found %s",filename);
+        }
+    }
+}
+
+static int ext2_unlink(inode_t *ip, dentry_t *dp)
+{
+    ext2_ctx_t *ctx;
+    int status;
+
+    kp_info("ext2", "unlinking >%s< in parent dir with ino %d", dp->name, ip->ino);
+
+    ctx = ext2_ctx_alloc(ip->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
+    // need to check that the inode "links" number is 1, otherwise we only delete the dirent
+    // do we allow unlinking empty directories using this function?
+    // there is no easy way to determine if a directory is empty, we have to check all elements for inode = 0
+    // if there is a subdirectory, then inode.links > 2 and we can skip the walk
+    // when removing a directory, we need to update inode.links on the parent
+    // we should merge empty dirents
+ext2_dirent_free(ctx, ip->ino, dp->name);
+while(1);
+    // ext2_lookup_t lookup = {
+    //     .name = dp->name,
+    //     .inode = 0,
+    //     .dent = 0,
+    //     .block = 0,
+    // };
+
+    // status = ext2_walk_directory(ctx, ip, 0, 0, &lookup);
+    // if(status < 0)
+    // {
+    //     return status;
+    // }
+
+    // if(lookup.dent == 0)
+    // {
+    //     return -ENOENT; // this should not happen
+    // }
+
+    // lookup.dent->inode = 0;
+    // ext2_write_cached(ctx, lookup.block);
+
+    // there are two parts to this
+    // removing the dirent
+    // removing the inode, if # links is zero
+    // deleting the inode itself, and truncating all blocks
+    ext2_inode_truncate(ctx, dp->inode->ino);
+    ext2_inode_free(ctx, dp->inode->ino);
+
+    ext2_ctx_free(ctx);
+    return 0;
+}
+
 static void *ext2_mount(devfs_t *dev, inode_t *inode)
 {
     int version, status;
-    ext2_inode_t root = {0};
+    ext2_inode_t *root;
     ext2_sb_t *sb;
     ext2_t *fs;
 
@@ -782,8 +1101,8 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     fs->dev = dev;
     fs->ctx = ext2_ctx_alloc(fs);
 
-    ext2_rw_inode(fs->ctx, &root, 2, false);
-    entry_to_inode(&root, inode, 2, fs->block_size);
+    root = ext2_read_inode(fs->ctx, 2, false);
+    ext2_inode_convert(root, inode, 2, fs->block_size);
 
     kp_info("ext2", "version: ext%d", version);
     kp_info("ext2", "required: %#04x", sb->features_required); // 0x0002 = Directory entries contain a type field
@@ -792,6 +1111,7 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     kp_info("ext2", "blocks: %d (%d bytes)", sb->blocks_count, fs->block_size);
     kp_info("ext2", "inodes: %d (%d bytes)", sb->inodes_count, sb->inode_size);
 
+    ext2_ctx_free(fs->ctx);
     return fs;
 }
 
@@ -815,6 +1135,7 @@ void ext2_init()
         .ioctl = 0,
         .readdir = ext2_readdir,
         .lookup = ext2_lookup,
+        .unlink = ext2_unlink,
         .mount = ext2_mount,
         .umount = ext2_umount
     };

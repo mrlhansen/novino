@@ -123,6 +123,10 @@ void kmain(bootstruct_t *bs)
     acpi_enable();
     pci_route_init();
 
+    // vfs_mount("/devices/ahci0/disk0", "ext2", "hd");
+    // // vfs_unlink("/hd/test.elf");
+    // // while(1);
+
     // start init process
     term_switch(1);
     spawn_init();
