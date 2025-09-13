@@ -15,6 +15,7 @@
 #include <kernel/x86/gdt.h>
 #include <kernel/x86/irq.h>
 #include <kernel/x86/smp.h>
+#include <kernel/x86/fpu.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/slmm.h>
 #include <kernel/mem/e820.h>
@@ -99,8 +100,9 @@ void kmain(bootstruct_t *bs)
     // Interrupt handling
     lapic_init();
     ioapic_init();
-    sti();
     irq_init();
+    fpu_init();
+    sti();
 
     // Time
     time_init();

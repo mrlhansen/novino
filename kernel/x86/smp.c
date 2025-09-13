@@ -66,7 +66,6 @@ static void smp_init_core(int id)
 {
     core[id].tr = tss_init(&core[id].tss, 0);
     scheduler_init_core(core_count, id, core[id].apic_id, &core[id].tss);
-    fpu_init();
     syscall_init();
 }
 
@@ -76,6 +75,7 @@ void smp_ap_entry()
     idt_load();
     vmm_load_kernel_pml4();
     lapic_enable();
+    fpu_init();
     smp_init_core(core_id);
     sti();
 
