@@ -395,9 +395,14 @@ int vfs_put_dirent(void *data, const char *name, inode_t *inode)
     }
 
     child = dcache_lookup(parent, name);
-    if(child == 0)
+    if(!child)
     {
-        dcache_append(parent, name, inode);
+        child = dcache_append(parent, name, inode);
+        if(!child)
+        {
+            rd->status = -ENOMEM;
+            return -ENOSPC;
+        }
     }
 
     return 0;

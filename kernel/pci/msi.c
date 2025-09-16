@@ -21,7 +21,7 @@ static void x86_msi_data(uint64_t *addr, uint64_t *data, int apic_id, int vector
     // Bit 15:   Trigger mode (0 = edge, 1 = level)
     // Bit 14:   Level for trigger mode (0 = low, 1 = high), only relevant for level trigger mode
     // Bit 8-10: Delivery mode (0 = fixed, 1 = lowest priority)
-    // Bit 0-7:  Interrupt vector (bit 0-7)
+    // Bit 0-7:  Interrupt vector
     *data = vector;
 }
 

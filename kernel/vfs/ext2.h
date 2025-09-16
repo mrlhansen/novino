@@ -55,9 +55,9 @@ typedef struct {
     uint16_t mode;         // Type and permissions
     uint16_t uid;          // User ID
     uint32_t size;         // Size in bytes (lower bits)
-    uint32_t atime;        // Last access time
-    uint32_t ctime;        // Creation time
-    uint32_t mtime;        // Last modification time
+    uint32_t atime;        // Access time
+    uint32_t ctime;        // Change time (change of metadata)
+    uint32_t mtime;        // Modification time (change of file content)
     uint32_t dtime;        // Deletion time
     uint16_t gid;          // Group ID
     uint16_t links;        // Number of hard links to this inode
@@ -93,7 +93,7 @@ typedef struct {
     uint8_t length;         // Name length (lower bits)
     union {
         uint8_t type;       // Type indicator (requires feature bit)
-        uint8_t length_ext; // Name of length (upper bits)
+        uint8_t length_ext; // Name length (upper bits)
     };
     char name[];            // File name
 } __attribute__((packed)) ext2_dentry_t;
@@ -112,6 +112,15 @@ typedef struct {
 } ext2_t;
 
 typedef struct {
+    size_t offset;    // Block offset
+    size_t count;     // Number of blocks
+    size_t block;     // Global block number
+    void *ptr;        // Block pointer
+    void *end;        // Block end
+    ext2_inode_t *ip; // Directory inode
+} ext2_iter_t;
+
+typedef struct {
     uint32_t block; // Block number
     bool dirty;     // Block has been modified
     link_t link;    // Link to next block
@@ -127,6 +136,7 @@ typedef struct {
     size_t ptr_ident;    // Cached lookup in ext2_inode_block
     size_t ptr_block;    // Cached lookup in ext2_inode_block
     void *ptr_data;      // Cached lookup in ext2_inode_block
+    ext2_iter_t iter;    // Iterator for directories
     void *blkbuf;        // Generic block buffer
 } ext2_ctx_t;
 

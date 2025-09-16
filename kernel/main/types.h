@@ -18,6 +18,8 @@ typedef signed long ssize_t;
 typedef unsigned long uintptr_t;
 typedef signed long intptr_t;
 
+#define __auto_type auto
+
 #define bool  _Bool
 #define true  1
 #define false 0
