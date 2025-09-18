@@ -897,6 +897,66 @@ int vfs_close(int id)
     return status;
 }
 
+int vfs_unlink(const char *pathname)
+{
+    vfs_fs_t *fs;
+    dentry_t *dp;
+    int status;
+
+    status = vfs_walk_path(pathname, &dp);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    if(dp->inode->flags & I_DIR)
+    {
+        return -EISDIR;
+    }
+
+    // check number of hard links, if 1, remove from cache, otherwise decrement
+    // check if file is currently open, if open, postpone delete until close, or just EBUSY?
+
+    fs = dp->inode->fs;
+
+    if(fs->ops->unlink == 0)
+    {
+        return -EROFS; // not sure about this? ENOTSUP?
+    }
+
+    return fs->ops->unlink(dp->parent->inode, dp);
+}
+
+int vfs_rmdir(const char *pathname)
+{
+    vfs_fs_t *fs;
+    dentry_t *dp;
+    int status;
+
+    status = vfs_walk_path(pathname, &dp);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    if((dp->inode->flags & I_DIR) == 0)
+    {
+        return -ENOTDIR;
+    }
+
+    // check if dir is currently open, if open, postpone delete until close, or just EBUSY?
+
+    fs = dp->inode->fs;
+
+    if(fs->ops->rmdir == 0)
+    {
+        return -EROFS; // not sure about this? ENOTSUP?
+    }
+
+    return fs->ops->rmdir(dp->parent->inode, dp);
+}
+
+
 int vfs_mount(const char *source, const char *fstype, const char *target)
 {
     vfs_mp_t *mp;

@@ -27,6 +27,9 @@ int vfs_getcwd(char *pathname, int size);
 int vfs_put_dirent(void*, const char*, inode_t*);
 int vfs_readdir(int fd, size_t count, dirent_t *dirent);
 
+int vfs_unlink(const char *pathname);
+int vfs_rmdir(const char *pathname);
+
 int vfs_register(const char *fstype, vfs_ops_t *ops);
 int vfs_mount(const char *source, const char *fstype, const char *target);
 int vfs_umount(const char *target);

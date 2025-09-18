@@ -84,6 +84,30 @@ static void *ext2_read_cached(ext2_ctx_t *ctx, uint32_t block, bool dirty)
     return item->data;
 }
 
+static void ext2_write_cached(ext2_ctx_t *ctx, uint32_t block)
+{
+    ext2_blk_t *item;
+
+    item = ctx->list.head;
+    while(item)
+    {
+        if(item->block >= block)
+        {
+            break;
+        }
+        item = item->link.next;
+    }
+
+    if(item->block == block)
+    {
+        item->dirty = true;
+        return;
+    }
+
+    kp_panic("ext2", "ext2_write_cached: unknown block!");
+    while(1);
+}
+
 static ext2_ctx_t *ext2_ctx_alloc(ext2_t *fs)
 {
     ext2_ctx_t *ctx = fs->ctx;
@@ -137,7 +161,7 @@ static void ext2_ctx_free(ext2_ctx_t *ctx)
 }
 
 //
-// Inodes and block group descriptors
+// Inodes, blocks, and block group descriptors
 //
 
 static void ext2_inode_convert(ext2_inode_t *sp, inode_t *dp, uint32_t ino, uint32_t blksz)
@@ -382,7 +406,7 @@ static ext2_inode_t *ext2_read_inode(ext2_ctx_t *ctx, uint32_t ino, bool dirty)
     bg     = (ino - 1) / sb->inodes_per_group;
     ino    = (ino - 1) % sb->inodes_per_group;
     block  = (ino * sb->inode_size) / fs->block_size;
-    offset = (ino % fs->inodes_per_block) * sb->inode_size;
+    offset = (ino * sb->inode_size) % fs->block_size;
 
     bgd = ext2_read_bgd(ctx, bg, false);
     if(!bgd)
@@ -399,8 +423,178 @@ static ext2_inode_t *ext2_read_inode(ext2_ctx_t *ctx, uint32_t ino, bool dirty)
     return ptr + offset;
 }
 
+static int ext2_free_blocks(ext2_ctx_t *ctx, uint32_t start, uint32_t count)
+{
+    ext2_bgd_t *bgd;
+    ext2_sb_t *sb;
+    uint8_t *bitmap;
+    int bg, pos;
+
+    kp_info("ext2", "freeing %d blocks from %d-%d", count, start, start+count-1);
+
+    sb  = ctx->fs->sb;
+    pos = start - sb->first_data_block;
+    bg  = pos / sb->blocks_per_group;
+    pos = pos % sb->blocks_per_group;
+
+    bgd = ext2_read_bgd(ctx, bg, true);
+    if(!bgd)
+    {
+        return ctx->errno;
+    }
+
+    bitmap = ext2_read_cached(ctx, bgd->block_bitmap, true);
+    if(!bitmap)
+    {
+        return ctx->errno;
+    }
+
+    for(int i = 0; i < count; i++)
+    {
+        bitmap[pos/8] &= ~(1 << (pos%8));
+        pos++;
+    }
+
+    bgd->free_blocks += count;
+    sb->free_blocks_count += count;
+
+    return 0;
+}
+
+static int ext2_inode_free(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t *ip;
+    ext2_bgd_t *bgd;
+    ext2_sb_t *sb;
+    uint8_t *bitmap;
+    int bg, pos;
+
+    ip = ext2_read_inode(ctx, ino, true);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    sb  = ctx->fs->sb;
+    bg  = (ino - 1) / sb->inodes_per_group;
+    pos = (ino - 1) % sb->blocks_per_group;
+
+    bgd = ext2_read_bgd(ctx, bg, true);
+    if(!bgd)
+    {
+        return ctx->errno;
+    }
+
+    bitmap = ext2_read_cached(ctx, bgd->inode_bitmap, true);
+    if(!bitmap)
+    {
+        return ctx->errno;
+    }
+
+    bitmap[pos/8] &= ~(1 << (pos%8));
+    bgd->free_inodes++;
+    ip->dtime = 0;
+    sb->free_inodes_count++;
+
+    return 0;
+}
+
+static int ext2_inode_truncate(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_inode_t *ip;
+    ext2_t *fs;
+    uint32_t *links, nlinks;
+    int start, count;
+    int block, prev;
+
+    ip = ext2_read_inode(ctx, ino, true);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    fs     = ctx->fs;
+    count  = (ip->sectors / fs->sectors_per_block);
+    block  = ip->block[0];
+    start  = block;
+    prev   = block;
+    links  = ctx->blkbuf; // TODO: we assume they will fit here
+    nlinks = 0;
+
+    if(block == 0)
+    {
+        return 0;
+    }
+
+    // free data blocks
+    for(int i = 1; i < count; i++)
+    {
+        block = ext2_inode_block(ctx, ip, i);
+        if(block == 0)
+        {
+            count = i;
+            break;
+        }
+
+        for(int i = 0; i < 3; i++)
+        {
+            if(ctx->ptr_links[i])
+            {
+                links[nlinks] = ctx->ptr_links[i];
+                nlinks++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if(block != prev + 1)
+        {
+            ext2_free_blocks(ctx, start, prev - start + 1);
+            start = block;
+        }
+
+        prev = block;
+    }
+
+    ext2_free_blocks(ctx, start, prev - start + 1);
+
+    // free indirect blocks
+    if(nlinks)
+    {
+        block = links[0];
+        start = block;
+        prev  = block;
+
+        for(int i = 1; i < nlinks; i++)
+        {
+            block = links[i];
+            if(block != prev + 1)
+            {
+                ext2_free_blocks(ctx, start, prev - start + 1);
+                start = block;
+            }
+            prev = block;
+        }
+
+        ext2_free_blocks(ctx, start, prev - start + 1);
+    }
+
+    // update inode
+    ip->sectors = 0;
+    ip->ctime = 0; // system_timestamp() ?
+
+    for(int i = 0; i < 15; i++)
+    {
+        ip->block[i] = 0;
+    }
+
+    return 0;
+}
+
 //
-// Iterating through directory entries
+// Directory entries (allocating, freeing, iterating)
 //
 
 static ext2_dentry_t *ext2_dirent_next(ext2_ctx_t *ctx, uint32_t *block, char *filename)
@@ -412,7 +606,7 @@ static ext2_dentry_t *ext2_dirent_next(ext2_ctx_t *ctx, uint32_t *block, char *f
     void *ptr;
 
     fs = ctx->fs;
-    it = &ctx->iter;
+    it = ctx->iter;
     dp = it->ptr;
 
     if(!dp)
@@ -469,7 +663,7 @@ static int ext2_dirent_iter(ext2_ctx_t *ctx, uint32_t ino, bool nodots)
     ext2_t *fs;
     void *ptr;
 
-    it = &ctx->iter;
+    it = ctx->iter;
     fs = ctx->fs;
 
     ip = ext2_read_inode(ctx, ino, false);
@@ -564,6 +758,108 @@ static int ext2_dirent_walk(ext2_ctx_t *ctx, uint32_t ino, size_t seek, void *da
     }
 
     return ctx->errno;
+}
+
+static int ext2_dirent_free(ext2_ctx_t *ctx, uint32_t ino, const char *name)
+{
+    ext2_dentry_t *dp, *prev;
+    uint32_t cblk, pblk;
+    char filename[256];
+    bool found;
+    int status;
+
+    // initialize iterator
+    status = ext2_dirent_iter(ctx, ino, true);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    // search for entry
+    found = false;
+    pblk = 0;
+    prev = 0;
+
+    while(dp = ext2_dirent_next(ctx, &cblk, filename), dp)
+    {
+        if(strcmp(name, filename) == 0)
+        {
+            found = true;
+            break;
+        }
+        pblk = cblk;
+        prev = dp;
+    }
+
+    if(!found)
+    {
+        return -ENOENT;
+    }
+
+    // merge with previous if within same block, otherwise mark as unused
+    if(pblk == cblk)
+    {
+        prev->size += dp->size;
+    }
+    else
+    {
+        dp->inode = 0;
+        pblk = cblk;
+        prev = dp;
+    }
+
+    // also merge next entry if within block and free
+    dp = ext2_dirent_next(ctx, &cblk, filename);
+    if(dp)
+    {
+        if(pblk == cblk && dp->inode == 0)
+        {
+            prev->size += dp->size;
+        }
+    }
+
+    ext2_write_cached(ctx, pblk);
+    return 0;
+}
+
+int ext2_check_empty(ext2_ctx_t *ctx, uint32_t ino)
+{
+    ext2_dentry_t *dp;
+    ext2_inode_t *ip;
+    int status;
+
+    ip = ext2_read_inode(ctx, ino, false);
+    if(!ip)
+    {
+        return ctx->errno;
+    }
+
+    if(ip->links > 1)
+    {
+        return 0;
+    }
+
+    status = ext2_dirent_iter(ctx, ino, true);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    while(dp = ext2_dirent_next(ctx, 0, 0), dp)
+    {
+        if(!dp)
+        {
+            status = ctx->errno;
+            break;
+        }
+        if(dp->inode)
+        {
+            status = -ENOTEMPTY;
+            break;
+        }
+    }
+
+    return status;
 }
 
 //
@@ -772,6 +1068,61 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
     return 0;
 }
 
+static int ext2_unlink(inode_t *ip, dentry_t *dp)
+{
+    ext2_inode_t *inode;
+    ext2_ctx_t *ctx;
+    int status;
+
+    kp_info("ext2", "unlinking >%s< in parent dir with ino %d", dp->name, ip->ino);
+
+    ctx = ext2_ctx_alloc(ip->data);
+    if(!ctx)
+    {
+        return -ENOMEM;
+    }
+
+    status = ext2_dirent_free(ctx, ip->ino, dp->name);
+    if(status < 0)
+    {
+        goto end;
+    }
+
+    inode = ext2_read_inode(ctx, dp->inode->ino, true);
+    if(!inode)
+    {
+        status = ctx->errno;
+        goto end;
+    }
+
+    if(inode->links > 1)
+    {
+        inode->links--;
+        goto end;
+    }
+
+    status = ext2_inode_truncate(ctx, dp->inode->ino);
+    if(status < 0)
+    {
+        goto end;
+    }
+
+    status = ext2_inode_free(ctx, dp->inode->ino);
+    if(status < 0)
+    {
+        goto end;
+    }
+
+    end:
+    ext2_ctx_free(ctx);
+    return status;
+}
+
+static int ext2_rmdir(inode_t *ip, dentry_t *dp)
+{
+
+}
+
 static void *ext2_mount(devfs_t *dev, inode_t *inode)
 {
     int version, status;
@@ -876,6 +1227,8 @@ void ext2_init()
         .ioctl = 0,
         .readdir = ext2_readdir,
         .lookup = ext2_lookup,
+        .unlink = ext2_unlink,
+        .rmdir = ext2_rmdir,
         .mount = ext2_mount,
         .umount = ext2_umount
     };

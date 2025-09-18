@@ -136,7 +136,7 @@ typedef struct {
     size_t ptr_ident;    // Cached lookup in ext2_inode_block
     size_t ptr_block;    // Cached lookup in ext2_inode_block
     void *ptr_data;      // Cached lookup in ext2_inode_block
-    ext2_iter_t iter;    // Iterator for directories
+    ext2_iter_t iter[1]; // Iterator for directories
     void *blkbuf;        // Generic block buffer
 } ext2_ctx_t;
 

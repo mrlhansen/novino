@@ -9,6 +9,7 @@ enum {
     ENOENT,       // No such file or directory
     ENOTDIR,      // Not a directory
     EISDIR,       // Is a directory
+    ENOTEMPTY,    // Directory is not empty
     ENODEV,       // No such device
     ENOFS,        // No such file system
     ENOSPC,       // No space left
