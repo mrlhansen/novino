@@ -4,6 +4,7 @@
 #include <kernel/vfs/types.h>
 
 void dcache_purge(dentry_t *root);
+void dcache_delete(dentry_t *item);
 dentry_t *dcache_lookup(dentry_t*, const char *name);
 dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode);
 

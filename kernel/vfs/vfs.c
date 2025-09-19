@@ -233,9 +233,15 @@ static char *vfs_read_path(vfs_path_t *path)
         path->prev = path->curr;
         path->curr = strtok_r(NULL, "/", &path->pos);
     }
+
+    path->depth--;
     return path->curr;
 }
 
+// Walk the path and return the dentry of the last component.
+// When the last component does not exist, a negative dentry is
+// returned together with the status ENOENT. If any other error
+// occurs during the traversal, no dentry is returned.
 static int vfs_walk_path(const char *pathname, dentry_t **dp)
 {
     autofree(vfs_path_t) *path = 0;
@@ -253,7 +259,7 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
     }
 
     parent = path->root;
-    *dp = parent;
+    *dp = 0;
 
     while(vfs_read_path(path))
     {
@@ -265,7 +271,6 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
         if(strcmp(path->curr, "..") == 0)
         {
             parent = parent->parent;
-            *dp = parent;
             continue;
         }
 
@@ -276,18 +281,18 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             {
                 return -ENOENT;
             }
-
             parent = &mp->dentry;
-            *dp = parent;
             continue;
         }
 
+        status = 0;
         child = dcache_lookup(parent, path->curr);
+
         if(child)
         {
             if(!child->inode)
             {
-                return -ENOENT;
+                status = -ENOENT;
             }
         }
         else
@@ -299,7 +304,14 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             status = fs->ops->lookup(parent->inode, path->curr, ip);
             if(status < 0)
             {
-                ip = 0;
+                if(status == -ENOENT)
+                {
+                    ip = 0;
+                }
+                else
+                {
+                    return status;
+                }
             }
 
             child = dcache_append(parent, path->curr, ip);
@@ -307,17 +319,28 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             {
                 return -ENOMEM;
             }
-            if(status < 0)
-            {
-                return status;
-            }
         }
 
-        *dp = child;
         parent = child;
+
+        if(status)
+        {
+            break;
+        }
     }
 
-    return 0;
+    if(!status)
+    {
+        *dp = parent;
+        return 0;
+    }
+
+    if(path->depth == 0)
+    {
+        *dp = parent;
+    }
+
+    return status;
 }
 
 void vfs_proc_init(process_t *pr, dentry_t *cwd)
@@ -487,7 +510,7 @@ int vfs_readdir(int id, size_t size, dirent_t *dirent)
     }
 
     // cache directory content
-    if(dp->cached == 0)
+    if(!dp->cached)
     {
         if(1) // enable caching
         {
@@ -504,7 +527,7 @@ int vfs_readdir(int id, size_t size, dirent_t *dirent)
         {
             if(fd->file->seek == dp->positive + 2)
             {
-                dp->cached = 1;
+                dp->cached = true;
             }
         }
 

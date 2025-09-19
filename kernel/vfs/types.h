@@ -64,10 +64,10 @@ struct inode {
 // Directory entry (dcache)
 struct dentry {
     char name[MAX_LFN];  // Entry name
-    uint8_t cached;      // All child entries are cached
-    uint64_t hash;       // Hash of entry name
-    uint32_t positive;   // Number of valid entries
-    uint32_t negative;   // Number of negative entries
+    bool cached;         // All child entries are cached
+    size_t hash;         // Hash of entry name
+    size_t positive;     // Number of valid entries
+    size_t negative;     // Number of negative entries
     inode_t *inode;      // Associated inode (zero for negative entries)
 
     dentry_t *parent;    // Parent entry

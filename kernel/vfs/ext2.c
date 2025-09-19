@@ -834,9 +834,11 @@ int ext2_check_empty(ext2_ctx_t *ctx, uint32_t ino)
         return ctx->errno;
     }
 
-    if(ip->links > 1)
+    // A directory without any subdirectories has exactly two hard links.
+    // We can use this as a quick check to eliminate directories with subdirectories.
+    if(ip->links > 2)
     {
-        return 0;
+        return -ENOTEMPTY;
     }
 
     status = ext2_dirent_iter(ctx, ino, true);
@@ -847,19 +849,13 @@ int ext2_check_empty(ext2_ctx_t *ctx, uint32_t ino)
 
     while(dp = ext2_dirent_next(ctx, 0, 0), dp)
     {
-        if(!dp)
-        {
-            status = ctx->errno;
-            break;
-        }
         if(dp->inode)
         {
-            status = -ENOTEMPTY;
-            break;
+            return -ENOTEMPTY;
         }
     }
 
-    return status;
+    return ctx->errno;
 }
 
 //
@@ -976,10 +972,83 @@ static int ext2_read_file(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 }
 
 //
+// Creation and removal of files and directories
+//
+
+static int ext2_unlink(ext2_ctx_t *ctx, inode_t *ip, dentry_t *dp)
+{
+    ext2_inode_t *inode;
+    int flags, ino;
+    int status;
+
+    flags = dp->inode->flags;
+    ino = dp->inode->ino;
+
+    // dir: check that directory is empty
+    if(flags & I_DIR)
+    {
+        status = ext2_check_empty(ctx, ino);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+
+    // all: remove directory entry
+    status = ext2_dirent_free(ctx, ip->ino, dp->name);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    // file: check for multiple hard links
+    if((flags & I_DIR) == 0)
+    {
+        inode = ext2_read_inode(ctx, ino, true);
+        if(!inode)
+        {
+            return ctx->errno;
+        }
+
+        if(inode->links > 1)
+        {
+            inode->links--;
+            return 0;
+        }
+    }
+
+    // all: truncate and free inode
+    status = ext2_inode_truncate(ctx, ino);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    status = ext2_inode_free(ctx, ino);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    // dir: adjust links for parent directory
+    if(flags & I_DIR)
+    {
+        inode = ext2_read_inode(ctx, ip->ino, true);
+        if(!inode)
+        {
+            return ctx->errno;
+        }
+        inode->links--;
+    }
+
+    return 0;
+}
+
+//
 // Wrapper functions for VFS operations
 //
 
-static int ext2_read(file_t *file, size_t size, void *buf)
+static int ext2fs_read(file_t *file, size_t size, void *buf)
 {
     ext2_ctx_t *ctx;
     int status;
@@ -996,7 +1065,7 @@ static int ext2_read(file_t *file, size_t size, void *buf)
     return status;
 }
 
-static int ext2_seek(file_t *file, ssize_t offset, int origin)
+static int ext2fs_seek(file_t *file, ssize_t offset, int origin)
 {
     inode_t *inode;
     size_t size;
@@ -1023,7 +1092,7 @@ static int ext2_seek(file_t *file, ssize_t offset, int origin)
     return offset;
 }
 
-static int ext2_readdir(file_t *file, size_t seek, void *data)
+static int ext2fs_readdir(file_t *file, size_t seek, void *data)
 {
     ext2_ctx_t *ctx;
     int status;
@@ -1040,7 +1109,7 @@ static int ext2_readdir(file_t *file, size_t seek, void *data)
     return status;
 }
 
-static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
+static int ext2fs_lookup(inode_t *ip, const char *name, inode_t *inode)
 {
     ext2_ctx_t *ctx;
     int status;
@@ -1068,9 +1137,8 @@ static int ext2_lookup(inode_t *ip, const char *name, inode_t *inode)
     return 0;
 }
 
-static int ext2_unlink(inode_t *ip, dentry_t *dp)
+static int ext2fs_unlink(inode_t *ip, dentry_t *dp)
 {
-    ext2_inode_t *inode;
     ext2_ctx_t *ctx;
     int status;
 
@@ -1082,48 +1150,12 @@ static int ext2_unlink(inode_t *ip, dentry_t *dp)
         return -ENOMEM;
     }
 
-    status = ext2_dirent_free(ctx, ip->ino, dp->name);
-    if(status < 0)
-    {
-        goto end;
-    }
-
-    inode = ext2_read_inode(ctx, dp->inode->ino, true);
-    if(!inode)
-    {
-        status = ctx->errno;
-        goto end;
-    }
-
-    if(inode->links > 1)
-    {
-        inode->links--;
-        goto end;
-    }
-
-    status = ext2_inode_truncate(ctx, dp->inode->ino);
-    if(status < 0)
-    {
-        goto end;
-    }
-
-    status = ext2_inode_free(ctx, dp->inode->ino);
-    if(status < 0)
-    {
-        goto end;
-    }
-
-    end:
+    status = ext2_unlink(ctx, ip, dp);
     ext2_ctx_free(ctx);
     return status;
 }
 
-static int ext2_rmdir(inode_t *ip, dentry_t *dp)
-{
-
-}
-
-static void *ext2_mount(devfs_t *dev, inode_t *inode)
+static void *ext2fs_mount(devfs_t *dev, inode_t *inode) // make a helper function for this as well?
 {
     int version, status;
     ext2_inode_t *root;
@@ -1207,7 +1239,7 @@ static void *ext2_mount(devfs_t *dev, inode_t *inode)
     return fs;
 }
 
-static int ext2_umount(void *data)
+static int ext2fs_umount(void *data)
 {
     ext2_t *fs = data;
     blkdev_close(fs->dev);
@@ -1221,16 +1253,16 @@ void ext2_init()
     static vfs_ops_t ops = {
         .open = 0,
         .close = 0,
-        .read = ext2_read,
+        .read = ext2fs_read,
         .write = 0,
-        .seek = ext2_seek,
+        .seek = ext2fs_seek,
         .ioctl = 0,
-        .readdir = ext2_readdir,
-        .lookup = ext2_lookup,
-        .unlink = ext2_unlink,
-        .rmdir = ext2_rmdir,
-        .mount = ext2_mount,
-        .umount = ext2_umount
+        .readdir = ext2fs_readdir,
+        .lookup = ext2fs_lookup,
+        .unlink = ext2fs_unlink,
+        .rmdir = ext2fs_unlink,
+        .mount = ext2fs_mount,
+        .umount = ext2fs_umount
     };
     vfs_register("ext2", &ops);
 }
