@@ -4,6 +4,7 @@
 #include <kernel/vfs/vfs.h>
 #include <kernel/vfs/fd.h>
 #include <kernel/sched/process.h>
+#include <kernel/time/time.h>
 #include <kernel/mem/heap.h>
 #include <kernel/cleanup.h>
 #include <kernel/debug.h>
@@ -821,10 +822,37 @@ int vfs_open(const char *pathname, int flags)
     int status;
     fd_t *fd;
 
+    if(flags & O_DIR)
+    {
+        if(flags != O_DIR)
+        {
+            return -EINVAL;
+        }
+    }
+
     status = vfs_walk_path(pathname, &dp);
     if(status < 0)
     {
-        return status;
+        if(!dp)
+        {
+            return status;
+        }
+    }
+
+    if(!dp->inode)
+    {
+        if(flags & O_CREATE)
+        {
+            status = vfs_create(pathname, 0644);
+            if(status < 0)
+            {
+                return status;
+            }
+        }
+        else
+        {
+            return -ENOENT;
+        }
     }
 
     ip = dp->inode;
@@ -857,7 +885,7 @@ int vfs_open(const char *pathname, int flags)
     {
         if(fs->ops->write == 0)
         {
-            return -EROFS;
+            return -ENOTSUP;
         }
     }
 
@@ -920,7 +948,56 @@ int vfs_close(int id)
     return status;
 }
 
-int vfs_unlink(const char *pathname)
+int vfs_create(const char *pathname, int mode)
+{
+    timeval_t tv;
+    vfs_fs_t *fs;
+    dentry_t *dp;
+    inode_t *ip;
+    int status;
+
+    status = vfs_walk_path(pathname, &dp);
+    if(status < 0)
+    {
+        if(!dp)
+        {
+            return status;
+        }
+    }
+
+    if(dp->inode)
+    {
+        return -EEXIST;
+    }
+
+    fs = dp->parent->inode->fs;
+    if(fs->ops->create == 0)
+    {
+        return -ENOTSUP;
+    }
+
+    dcache_mark_positive(dp);
+    gettime(&tv);
+    ip = dp->inode;
+
+    ip->flags = I_FILE;
+    ip->uid = 1337;
+    ip->gid = 1337;
+    ip->mode = mode;
+    ip->atime = tv.tv_sec;
+    ip->ctime = tv.tv_sec;
+    ip->mtime = tv.tv_sec;
+
+    status = fs->ops->create(dp);
+    if(status < 0)
+    {
+        dcache_mark_negative(dp);
+    }
+
+    return status;
+}
+
+int vfs_remove(const char *pathname)
 {
     vfs_fs_t *fs;
     dentry_t *dp;
@@ -937,17 +1014,126 @@ int vfs_unlink(const char *pathname)
         return -EISDIR;
     }
 
-    // check number of hard links, if 1, remove from cache, otherwise decrement
     // check if file is currently open, if open, postpone delete until close, or just EBUSY?
 
     fs = dp->inode->fs;
 
-    if(fs->ops->unlink == 0)
+    if(fs->ops->remove == 0)
     {
-        return -EROFS; // not sure about this? ENOTSUP?
+        return -ENOTSUP;
     }
 
-    return fs->ops->unlink(dp->parent->inode, dp);
+    status = fs->ops->remove(dp);
+    if(!status)
+    {
+        dcache_mark_negative(dp);
+    }
+
+    return status;
+}
+
+int vfs_rename(const char *oldpath, const char *newpath)
+{
+    vfs_fs_t *fs;
+    dentry_t *src;
+    dentry_t *dst;
+    int status;
+
+    status = vfs_walk_path(oldpath, &src);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    status = vfs_walk_path(newpath, &dst);
+    if(status < 0)
+    {
+        if(!dst)
+        {
+            return status;
+        }
+    }
+
+    // linux overwrites target if it exists?
+    // in that case we need to check that types matches (file -> file and dir -> dir)
+
+    if(dst->inode)
+    {
+        return -EEXIST;
+    }
+
+    if(src->inode->mp != dst->parent->inode->mp)
+    {
+        return -EXDEV;
+    }
+
+    fs = src->inode->fs;
+    if(fs->ops->rename == 0)
+    {
+        return -ENOTSUP;
+    }
+
+    dcache_mark_positive(dst);
+    dst->inode[0] = src->inode[0]; // ability to move a dentry, such that pointers to the old entry are still valid?
+
+    status = fs->ops->rename(src, dst);
+    if(status < 0)
+    {
+        dcache_mark_negative(dst);
+        return status;
+    }
+
+    dcache_mark_negative(src);
+    return 0;
+}
+
+int vfs_mkdir(const char *pathname, int mode)
+{
+    timeval_t tv;
+    vfs_fs_t *fs;
+    dentry_t *dp;
+    inode_t *ip;
+    int status;
+
+    status = vfs_walk_path(pathname, &dp);
+    if(status < 0)
+    {
+        if(!dp)
+        {
+            return status;
+        }
+    }
+
+    if(dp->inode)
+    {
+        return -EEXIST;
+    }
+
+    fs = dp->parent->inode->fs;
+    if(fs->ops->mkdir == 0)
+    {
+        return -ENOTSUP;
+    }
+
+    dcache_mark_positive(dp);
+    gettime(&tv);
+    ip = dp->inode;
+
+    ip->flags = I_DIR;
+    ip->uid = 1337;
+    ip->gid = 1337;
+    ip->mode = mode;
+    ip->atime = tv.tv_sec;
+    ip->ctime = tv.tv_sec;
+    ip->mtime = tv.tv_sec;
+
+    status = fs->ops->mkdir(dp);
+    if(status < 0)
+    {
+        dcache_mark_negative(dp);
+    }
+
+    return status;
 }
 
 int vfs_rmdir(const char *pathname)
@@ -973,12 +1159,17 @@ int vfs_rmdir(const char *pathname)
 
     if(fs->ops->rmdir == 0)
     {
-        return -EROFS; // not sure about this? ENOTSUP?
+        return -ENOTSUP;
     }
 
-    return fs->ops->rmdir(dp->parent->inode, dp);
-}
+    status = fs->ops->rmdir(dp);
+    if(!status)
+    {
+        dcache_mark_negative(dp);
+    }
 
+    return status;
+}
 
 int vfs_mount(const char *source, const char *fstype, const char *target)
 {
@@ -1102,14 +1293,14 @@ int vfs_register(const char *fstype, vfs_ops_t *ops)
     int status;
 
     status = vfs_validate_name(fstype, sizeof(fs->name));
-    if(status)
+    if(status < 0)
     {
         return status;
     }
 
     if(vfs_find_fs(fstype))
     {
-        return -ENOFS;
+        return -EEXIST;
     }
 
     if(ops->mount == 0 || ops->umount == 0)

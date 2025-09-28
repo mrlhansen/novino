@@ -5,6 +5,10 @@
 
 void dcache_purge(dentry_t *root);
 void dcache_delete(dentry_t *item);
+
+void dcache_mark_positive(dentry_t *item);
+void dcache_mark_negative(dentry_t *item);
+
 dentry_t *dcache_lookup(dentry_t*, const char *name);
 dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode);
 
@@ -28,7 +32,11 @@ int vfs_getcwd(char *pathname, int size);
 int vfs_put_dirent(void*, const char*, inode_t*);
 int vfs_readdir(int fd, size_t count, dirent_t *dirent);
 
-int vfs_unlink(const char *pathname);
+int vfs_create(const char *pathname, int mode);
+int vfs_remove(const char *pathname);
+int vfs_rename(const char *oldpath, const char *newpath);
+
+int vfs_mkdir(const char *pathname, int mode);
 int vfs_rmdir(const char *pathname);
 
 int vfs_register(const char *fstype, vfs_ops_t *ops);

@@ -113,6 +113,44 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode)
     return item;
 }
 
+void dcache_mark_positive(dentry_t *item)
+{
+    dentry_t *parent;
+    inode_t *inode;
+
+    if(item->inode)
+    {
+        return;
+    }
+
+    parent = item->parent;
+    parent->negative--;
+    parent->positive++;
+
+    inode = (void*)(item + 1);
+    item->inode = inode;
+
+    inode->fs = parent->inode->fs;
+    inode->mp = parent->inode->mp;
+    inode->data = parent->inode->data;
+}
+
+void dcache_mark_negative(dentry_t *item)
+{
+    dentry_t *parent;
+
+    if(!item->inode)
+    {
+        return;
+    }
+
+    parent = item->parent;
+    parent->negative++;
+    parent->positive--;
+
+    item->inode = 0;
+}
+
 void dcache_purge(dentry_t *root)
 {
     dentry_t *item;

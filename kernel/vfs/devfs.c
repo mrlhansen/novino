@@ -407,6 +407,14 @@ void devfs_init()
         .ioctl = devfs_ioctl,
         .readdir = devfs_readdir,
         .lookup = devfs_lookup,
+        .truncate = 0,
+        .setattr = 0,
+        .getattr = 0,
+        .create = 0,
+        .remove = 0,
+        .rename = 0,
+        .mkdir = 0,
+        .rmdir = 0,
         .mount = devfs_mount,
         .umount = devfs_umount
     };

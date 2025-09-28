@@ -468,6 +468,14 @@ void iso9660_init()
         .ioctl = 0,
         .readdir = iso9660_readdir,
         .lookup = iso9660_lookup,
+        .truncate = 0,
+        .setattr = 0,
+        .getattr = 0,
+        .create = 0,
+        .remove = 0,
+        .rename = 0,
+        .mkdir = 0,
+        .rmdir = 0,
         .mount = iso9660_mount,
         .umount = iso9660_umount
     };

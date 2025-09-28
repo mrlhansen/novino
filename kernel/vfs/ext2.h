@@ -4,13 +4,26 @@
 #include <kernel/atomic.h>
 #include <kernel/lists.h>
 
+// ext2 features
+enum {
+    EXT2_REQ_DIRENT_TYPE = 0x02, // Directory entries contain a type field
+    EXT2_RO_SPARSE_SUPER = 0x01, // Sparse superblocks and group descriptor tables
+    EXT2_RO_64BIT_FILESZ = 0x02, // File system uses a 64-bit file size
+    EXT2_RO_BTREE_DIR    = 0x04, // Directories uses B-Trees
+    EXT2_OPT_PREALLOC    = 0x01, // Preallocate directory blocks to reduce fragmentation
+    EXT2_OPT_HAS_JOURNAL = 0x04, // Filesystem has a journal (ext3/4)
+    EXT2_OPT_INODE_XATTR = 0x08, // Inodes have extended attributes
+    EXT2_OPT_FS_RESIZE   = 0x10, // File system can resize itself for larger partitions
+    EXT2_OPT_HASH_INDEX  = 0x20, // Directories use hash index
+};
+
 // ext2 superblock
 typedef struct {
-    uint32_t inodes_count;           // Total number of inodes
-    uint32_t blocks_count;           // Total number of blocks
-    uint32_t reserved_blocks_count;  // Number of blocks reserved for superuser
-    uint32_t free_blocks_count;      // Total number of unallocated blocks
-    uint32_t free_inodes_count;      // Total number of unallocated inodes
+    uint32_t total_inodes;           // Total number of inodes
+    uint32_t total_blocks;           // Total number of blocks
+    uint32_t reserved_blocks;        // Number of blocks reserved for superuser
+    uint32_t free_blocks;            // Total number of unallocated blocks
+    uint32_t free_inodes;            // Total number of unallocated inodes
     uint32_t first_data_block;       // Block number of the block containing the superblock
     uint32_t log_block_size;         // Block size calculated as (1024 << N)
     uint32_t log_frag_size;          // Fragment size calculated as (1024 << N)
@@ -19,8 +32,8 @@ typedef struct {
     uint32_t inodes_per_group;       // Number of inodes in each block group
     uint32_t mount_time;             // Last mount time
     uint32_t write_time;             // Last written time
-    uint16_t mount_count;            // Number of times the volume has been mounted since its last consistency check
-    uint16_t max_mount_count;        // Number of mounts allowed before a consistency check must be done
+    uint16_t num_mounts;             // Number of times the volume has been mounted since its last consistency check
+    uint16_t max_num_mounts;         // Number of mounts allowed before a consistency check must be done
     uint16_t signature;              // EXT2 signature (0xEF53)
     uint16_t state;                  // File system state
     uint16_t errors;                 // What to do when an error is detected
@@ -31,10 +44,10 @@ typedef struct {
     uint32_t major_revision;         // EXT2 major version
     uint16_t def_resuid;             // User ID that can use reserved blocks
     uint16_t def_resgid;             // Group ID that can use reserved blocks
-    uint32_t first_inode;            // First non-reserved inode in file system.
+    uint32_t first_inode;            // First non-reserved inode in file system
     uint16_t inode_size;             // Size of each inode structure in bytes
     uint16_t block_group_number;     // Block group that this superblock is part of (for backup copies)
-    uint32_t features_optional;      // Optional features presen
+    uint32_t features_optional;      // Optional features present
     uint32_t features_required;      // Required features present
     uint32_t features_readonly;      // Features that if not supported, the volume must be mounted read-only
     uint8_t uuid[16];                // File system ID
@@ -63,9 +76,9 @@ typedef struct {
     uint16_t links;        // Number of hard links to this inode
     uint32_t sectors;      // Number of sectors used by this inode
     uint32_t flags;        // Inode flags
-    uint32_t osval;        // Operating system specific value #1
+    uint32_t osval;        // Operating system specific value #1 - TODO: we could use this for storing the inode number
     uint32_t block[15];    // Block pointers
-    uint32_t generation;   // Generation number
+    uint32_t generation;   // Generation number (for NFS)
     uint32_t file_acl;     // Extended attribute block (File ACL)
     union {
         uint32_t dir_acl;  // Directory ACL
@@ -98,19 +111,29 @@ typedef struct {
     char name[];            // File name
 } __attribute__((packed)) ext2_dentry_t;
 
+// ext2 filesystem
 typedef struct {
     uint32_t block_size;         // Block size in bytes
     uint32_t inodes_per_block;   // Inodes per block
     uint16_t sectors_per_block;  // Sectors per block
-    uint32_t block_groups_count; // Number of block groups
     uint32_t bgds_per_block;     // Block group descriptors per block
     uint32_t bgds_start;         // First block group descriptor
+    uint32_t bgds_total;         // Number of block groups
     uint8_t version;             // File system version (ext2,3,4)
     ext2_sb_t *sb;               // Superblock
     devfs_t *dev;                // Block device
     void *ctx;                   // Default context
 } ext2_t;
 
+// time fields
+enum {
+    EXT2_ATIME = (1 << 0),
+    EXT2_CTIME = (1 << 1),
+    EXT2_DTIME = (1 << 2),
+    EXT2_MTIME = (1 << 3),
+};
+
+// iterator for directory entries
 typedef struct {
     size_t offset;    // Block offset
     size_t count;     // Number of blocks
@@ -120,13 +143,37 @@ typedef struct {
     ext2_inode_t *ip; // Directory inode
 } ext2_iter_t;
 
+// distribution of indirect blocks
 typedef struct {
-    uint32_t block; // Block number
-    bool dirty;     // Block has been modified
-    link_t link;    // Link to next block
-    void *data;     // Block data
+    size_t ns;    // Single: Number of 1st level blocks
+    size_t nd;    // Double: Number of 1st level blocks
+    size_t nds;   // Double: Number of 2nd level blocks
+    size_t nt;    // Triple: Number of 1st level blocks
+    size_t ntd;   // Triple: Number of 2nd level blocks
+    size_t nts;   // Triple: Number of 3rd level blocks
+    size_t inum;  // Total number of indirect blocks
+    size_t dnum;  // Total number of data blocks
+} ext2_ibd_t;
+
+// walking of inode blocks
+typedef struct {
+    bool create;
+    size_t db_next;
+    size_t db_count;
+    size_t ib_next;
+    size_t ib_count;
+} ext2_ibw_t;
+
+// context data block
+typedef struct {
+    size_t block;  // Block number
+    bool dirty;    // Block has been modified
+    bool ready;    // Block is ready
+    link_t link;   // Link to next block
+    void *data;    // Block data
 } ext2_blk_t;
 
+// context for file operations
 typedef struct {
     ext2_t *fs;          // Context filesystem
     lock_t lock;         // Context lock
@@ -134,6 +181,7 @@ typedef struct {
     int errno;           // Propagated error code
     size_t ptr_links[3]; // Blocks used for indirect pointers
     size_t ptr_ident;    // Cached lookup in ext2_inode_block
+    size_t ptr_index;    // Cached lookup in ext2_inode_block
     size_t ptr_block;    // Cached lookup in ext2_inode_block
     void *ptr_data;      // Cached lookup in ext2_inode_block
     ext2_iter_t iter[1]; // Iterator for directories

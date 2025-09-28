@@ -35,6 +35,9 @@ char *strerror(int errnum)
         case EISDIR:
             str = "Is a directory";
             break;
+        case ENOTEMPTY:
+            str = "Directory is not empty";
+            break;
         case ENODEV:
             str = "No such device";
             break;
@@ -43,6 +46,9 @@ char *strerror(int errnum)
             break;
         case ENOSPC:
             str = "No space left";
+            break;
+        case EXDEV:
+            str = "Cross-device operation not permitted";
             break;
         case EDOM:
             str = "Argument out of domain";

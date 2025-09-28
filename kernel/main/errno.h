@@ -13,6 +13,7 @@ enum {
     ENODEV,       // No such device
     ENOFS,        // No such file system
     ENOSPC,       // No space left
+    EXDEV,        // Cross-device operation not permitted
     EDOM,         // Argument out of domain
     ERANGE,       // Argument out of range
     EILSEQ,       // Illegal byte sequence

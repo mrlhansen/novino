@@ -118,8 +118,14 @@ typedef struct {
     int (*ioctl)(file_t*, size_t, size_t);
     int (*readdir)(file_t*, size_t, void*);
     int (*lookup)(inode_t*, const char*, inode_t*);
-    int (*unlink)(inode_t*, dentry_t*);
-    int (*rmdir)(inode_t*, dentry_t*);
+    int (*truncate)(inode_t*);
+    int (*setattr)(inode_t*);
+    int (*getattr)(inode_t*);
+    int (*create)(dentry_t*);
+    int (*remove)(dentry_t*);
+    int (*rename)(dentry_t*, dentry_t*);
+    int (*mkdir)(dentry_t*);
+    int (*rmdir)(dentry_t*);
     void* (*mount)(devfs_t*, inode_t*);
     int (*umount)(void*);
 } vfs_ops_t;

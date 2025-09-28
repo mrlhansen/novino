@@ -345,6 +345,14 @@ void initrd_init(uint64_t address, uint32_t size)
         .ioctl = 0,
         .readdir = initrd_readdir,
         .lookup = initrd_lookup,
+        .truncate = 0,
+        .setattr = 0,
+        .getattr = 0,
+        .create = 0,
+        .remove = 0,
+        .rename = 0,
+        .mkdir = 0,
+        .rmdir = 0,
         .mount = initrd_mount,
         .umount = initrd_umount
     };
