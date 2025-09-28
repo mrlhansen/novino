@@ -74,7 +74,7 @@ FILE *fopen(const char *filename, const char *mode)
     fd = sys_open(filename, kflags);
     if(fd < 0)
     {
-        // set errno
+        errno = -fd;
         return NULL;
     }
 

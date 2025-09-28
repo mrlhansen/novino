@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 static int nflg = 0;
 static char buf[512];
@@ -67,7 +68,7 @@ int main(int argc, char *argv[])
             fp = fopen(argv[i], "r");
             if(fp == NULL)
             {
-                printf("%s: %s: unable to open\n", argv[0], argv[i]); // perror();
+                printf("%s: %s: %s\n", argv[0], argv[i], strerror(errno));
                 errflg = 1;
                 continue;
             }

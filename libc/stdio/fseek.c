@@ -21,7 +21,7 @@ int fseek(FILE *fp, long offset, int origin)
     status = sys_seek(fp->fd, offset, origin);
     if(status < 0)
     {
-        // set errno
+        errno = -status;
         return -1;
     }
 

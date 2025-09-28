@@ -8,7 +8,7 @@ int fclose(FILE *fp)
 
     if(fp == NULL)
     {
-        // set errno
+        // set errno?
         return EOF;
     }
 
@@ -18,7 +18,7 @@ int fclose(FILE *fp)
 
     if(status < 0)
     {
-        // set errno
+        errno = -status;
         return EOF;
     }
 

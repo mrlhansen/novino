@@ -1,6 +1,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {
@@ -15,8 +16,8 @@ int main(int argc, char *argv[])
     status = mkdir(argv[1], 0777);
     if(status < 0)
     {
-        perror("Unable to create directory");
-        return -1;
+        printf("%s: %s: %s\n", argv[0], argv[1], strerror(errno));
+        return 1;
     }
 
     return 0;

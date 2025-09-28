@@ -2,6 +2,8 @@
 #include <nonstd.h>
 #include <dirent.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 
 static int oneflg = 0;
 static int longflg = 0;
@@ -19,11 +21,7 @@ static void ls(const char *path, DIR *dp)
         {
             continue;
         }
-        if(oneflg)
-        {
-            printf("%s\n", dent->d_name);
-        }
-        else if(longflg)
+        if(longflg)
         {
             sprintf(buf, "%s/%s", path, dent->d_name);
             stat(buf, &st);
@@ -43,6 +41,10 @@ static void ls(const char *path, DIR *dp)
                 st.st_size,
                 dent->d_name
             );
+        }
+        else if(oneflg)
+        {
+            printf("%s\n", dent->d_name);
         }
         else
         {
@@ -97,7 +99,7 @@ int main(int argc, char *argv[])
         dp = opendir(argv[i]);
         if(dp == NULL)
         {
-            printf("%s: %s: unable to open\n", argv[0], argv[i]); // perror();
+            printf("%s: %s: %s\n", argv[0], argv[i], strerror(errno));
             errflg = 1;
             continue;
         }

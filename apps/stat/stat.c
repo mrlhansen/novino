@@ -19,8 +19,8 @@ int main(int argc, char *argv[])
     status = stat(argv[1], &st);
     if(status < 0)
     {
-        perror("Unable to stat file");
-        return -1;
+        printf("%s: %s: %s\n", argv[0], argv[1], strerror(errno));
+        return 1;
     }
 
     printf("File   : %s\n", argv[1]);

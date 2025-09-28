@@ -13,7 +13,7 @@ long ftell(FILE *fp)
     pos = sys_seek(fp->fd, 0, SEEK_CUR);
     if(pos < 0)
     {
-        // set errno
+        errno = -pos;
         return -1L;
     }
 

@@ -7,7 +7,7 @@ set -e
 source env.sh
 
 # build libc for kernel space
-export CCFLAGS=${KS_CCFLAGS}
+export CCFLAGS="${KS_CCFLAGS} -D__KERNEL__"
 make clean -C libc
 make -C libc
 mv ${SYSROOT}${LIBDIR}/libc.a ${SYSROOT}${LIBDIR}/libk.a

@@ -73,7 +73,7 @@ long __libc_fp_write(FILE *fp, size_t size, void *ptr)
     status = sys_write(fp->fd, size, ptr);
     if(status < size)
     {
-        // set errno
+        errno = -status;
         fp->flags |= F_ERR;
         return status;
     }
@@ -88,7 +88,7 @@ long __libc_fp_read(FILE *fp, size_t size, void *ptr)
     status = sys_read(fp->fd, size, ptr);
     if(status < 0)
     {
-        // set errno
+        errno = -status;
         fp->flags |= F_ERR;
         return status;
     }
