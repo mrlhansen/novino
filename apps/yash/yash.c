@@ -1,5 +1,4 @@
 #include <kernel/term/term.h>
-#include <_syscall.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -168,7 +167,7 @@ static char *yash_gets_read()
     static char buf[64];
     int sz;
 
-    sz = sys_read(0, 63, buf);
+    sz = read(0, buf, 63);
     if(sz == 0)
     {
         return NULL;
@@ -197,9 +196,9 @@ static char *yash_gets(char *str)
     // terminal flags
     if(flags == 0)
     {
-        sys_ioctl(0, TIOGETFLAGS, &flags);
+        ioctl(0, TIOGETFLAGS, &flags);
     }
-    sys_ioctl(0, TIOSETFLAGS, NOBUF | CURSOR | WRAP);
+    ioctl(0, TIOSETFLAGS, NOBUF | CURSOR | WRAP);
 
     // null terminate
     *str = '\0';
@@ -380,7 +379,7 @@ static char *yash_gets(char *str)
     }
 
     // restore flags
-    sys_ioctl(0, TIOSETFLAGS, flags);
+    ioctl(0, TIOSETFLAGS, flags);
 
     // push command to history
     if(*str)

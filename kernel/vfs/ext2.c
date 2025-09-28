@@ -13,14 +13,12 @@
 
 static inline int ext2_read_direct(ext2_t *fs, uint32_t block, void *data)
 {
-    kp_info("ext2", "direct read %d", block);
     block = (block * fs->sectors_per_block);
     return blkdev_read(fs->dev, block, fs->sectors_per_block, data);
 }
 
 static inline int ext2_write_direct(ext2_t *fs, uint32_t block, void *data)
 {
-    kp_info("ext2", "direct write %d", block);
     block = (block * fs->sectors_per_block);
     return blkdev_write(fs->dev, block, fs->sectors_per_block, data);
 }
@@ -1229,7 +1227,7 @@ static int ext2_inode_expand(ext2_ctx_t *ctx, uint32_t ino, uint32_t goal, bool 
     inode->sectors = (a.inum + a.dnum) * fs->sectors_per_block;
     if(grow)
     {
-        inode->size = a.dnum * fs->sectors_per_block;
+        inode->size = a.dnum * fs->block_size;
     }
 
     return 0;
@@ -1501,7 +1499,7 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     }
 
     // initialize iterator
-    status = ext2_dirent_iter(ctx, dir->ino, true);
+    status = ext2_dirent_iter(ctx, dir->ino, false);
     if(status < 0)
     {
         return status;
@@ -1975,7 +1973,7 @@ static int ext2_mkdir(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     // create . and .. entries
     dp->inode = obj->ino;
     dp->length = 1;
-    dp->size = sizeof(*dp) + dp->length;
+    dp->size = sizeof(ext2_dentry_t) + dp->length;
     dp->name[0] = '.';
 
     size = ctx->fs->block_size - dp->size;

@@ -241,6 +241,43 @@ static long sys_umount(const char *name)
     return vfs_umount(name);
 }
 
+static long sys_mkdir(const char *path, int mode)
+{
+    assert_nonzero(path);
+    assert_userspace(path);
+    return vfs_mkdir(path, mode);
+}
+
+static long sys_rmdir(const char *path)
+{
+    assert_nonzero(path);
+    assert_userspace(path);
+    return vfs_rmdir(path);
+}
+
+static long sys_create(const char *path, int mode)
+{
+    assert_nonzero(path);
+    assert_userspace(path);
+    return vfs_create(path, mode);
+}
+
+static long sys_remove(const char *path)
+{
+    assert_nonzero(path);
+    assert_userspace(path);
+    return vfs_remove(path);
+}
+
+static long sys_rename(const char *oldpath, const char *newpath)
+{
+    assert_nonzero(oldpath);
+    assert_userspace(oldpath);
+    assert_nonzero(newpath);
+    assert_userspace(newpath);
+    return vfs_rename(oldpath, newpath);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -263,6 +300,11 @@ const void *syscall_table[] = {
     sys_getpid,  // 16 = getpid
     sys_mount,   // 17 = mount
     sys_umount,  // 18 = umount
+    sys_mkdir,   // 19 = mkdir
+    sys_rmdir,   // 20 = rmdir
+    sys_create,  // 21 = create
+    sys_remove,  // 22 = remove
+    sys_rename,  // 23 = rename
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

@@ -1,11 +1,11 @@
 #include <_syscall.h>
 #include <errno.h>
 
-int chdir(const char *path)
+int create(const char *path, int mode)
 {
     int status;
 
-    status = sys_chdir(path);
+    status = sys_create(path, mode);
     if(status < 0)
     {
         errno = -status;

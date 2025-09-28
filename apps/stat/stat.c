@@ -37,5 +37,7 @@ int main(int argc, char *argv[])
     tm = gmtime(&st.st_ctime);
     printf("Change : %s", asctime(tm));
 
+    // Add links and file type
+
     return 0;
 }

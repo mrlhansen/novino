@@ -1,16 +1,16 @@
 #include <_syscall.h>
 #include <errno.h>
 
-int chdir(const char *path)
+ssize_t read(int fd, void *buf, size_t size)
 {
-    int status;
+    ssize_t status;
 
-    status = sys_chdir(path);
+    status = sys_read(fd, size, buf);
     if(status < 0)
     {
         errno = -status;
         return -1;
     }
 
-    return 0;
+    return status;
 }

@@ -88,3 +88,18 @@ static inline long syscall(size_t id, size_t arg0, size_t arg1, size_t arg2, siz
 
 #define sys_umount(target) \
     syscall(18, (size_t)target, 0, 0, 0, 0)
+
+#define sys_mkdir(path, mode) \
+    syscall(19, (size_t)path, mode, 0, 0, 0)
+
+#define sys_rmdir(path) \
+    syscall(20, (size_t)path, 0, 0, 0, 0)
+
+#define sys_create(path, mode) \
+    syscall(21, (size_t)path, mode, 0, 0, 0)
+
+#define sys_remove(path) \
+    syscall(22, (size_t)path, 0, 0, 0, 0)
+
+#define sys_rename(oldpath, newpath) \
+    syscall(22, (size_t)oldpath, (size_t)newpath, 0, 0, 0)

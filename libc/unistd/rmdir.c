@@ -1,11 +1,11 @@
 #include <_syscall.h>
 #include <errno.h>
 
-int chdir(const char *path)
+int rmdir(const char *path)
 {
     int status;
 
-    status = sys_chdir(path);
+    status = sys_rmdir(path);
     if(status < 0)
     {
         errno = -status;
