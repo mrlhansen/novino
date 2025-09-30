@@ -18,7 +18,6 @@ static inline void memsetw(uint16_t *dst, uint16_t val, int len)
     }
 }
 
-
 void vga_refresh(console_t *con)
 {
     uint16_t size;

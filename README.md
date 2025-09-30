@@ -29,6 +29,6 @@ There are some extra scripts, which can be called if needed.
 
 * `sabi.sh` will clone the [sabi](https://github.com/mrlhansen/sabi) repository and copy the files into the `sabi` folder.
 
-* `libc.sh` will compile the C library twice, once for kernel space and once for user space. Even though the entire library is compiled for kernel space, there are many functions that should never actually be called from kernel space.
+* `libc.sh` will compile the C library for user space applications.
 
 * `env.sh` contains environment variables and compile flags. You will have to adjust the `PATH` variable for finding the right cross compiler.
