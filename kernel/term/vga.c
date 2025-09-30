@@ -1,7 +1,6 @@
 #include <kernel/term/console.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/mem/heap.h>
-#include <string.h>
 
 static inline void memcpyw(uint16_t *dst, uint16_t *src, int len)
 {
@@ -10,6 +9,15 @@ static inline void memcpyw(uint16_t *dst, uint16_t *src, int len)
         *dst++ = *src++;
     }
 }
+
+static inline void memsetw(uint16_t *dst, uint16_t val, int len)
+{
+    while(len--)
+    {
+        *dst++ = val;
+    }
+}
+
 
 void vga_refresh(console_t *con)
 {

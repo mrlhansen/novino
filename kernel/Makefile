@@ -8,7 +8,7 @@ all: $(TARGETS)
 
 .PHONY: kernel.elf
 kernel.elf:
-	$(CC) $(LDFLAGS) -T kernel.ld -o $@ crt/crti.o crt/crtbegin.o $(OBJECTS) -lk -lgcc -lsabi crt/crtend.o crt/crtn.o
+	$(CC) $(LDFLAGS) -T kernel.ld -o $@ crt/crti.o crt/crtbegin.o $(OBJECTS) -lgcc -lsabi crt/crtend.o crt/crtn.o
 
 .PHONY: clean
 clean:

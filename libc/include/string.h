@@ -38,7 +38,6 @@ size_t strlen(const char *);
 
 /* non-standard */
 ssize_t strscpy(char*, const char*, size_t);
-void *memsetw(void *, int, size_t);
 char *strrev(char *);
 char *strtoupper(char *);
 char *strtolower(char *);

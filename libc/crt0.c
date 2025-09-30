@@ -1,9 +1,3 @@
-#ifdef __KERNEL__
-
-int errno;
-
-#else
-
 #include <_stdio.h>
 #include <_stdlib.h>
 
@@ -35,5 +29,3 @@ void __start(char **argv, char **envp)
     __libc_fd_exit();
     exit(exitcode);
 }
-
-#endif
