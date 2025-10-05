@@ -146,7 +146,7 @@ void thread_signal(thread_t *thread)
 
         // there are 2 different scenarios when unblocking the thread
         // 1. yielding has already finished and we simply unblock the thread
-        // 2. yielding is current ongoing on another core, so we need to wait
+        // 2. yielding is currently ongoing on another core, so we need to wait
 
         while(thread->yield)
         {
@@ -184,7 +184,6 @@ void thread_wait()
     {
         thread->yield = 1;
         thread->sig.wait = 1;
-        thread->sig.core = smp_core_id();
         thread->state = BLOCKING;
         list_append(&hold, thread);
     }

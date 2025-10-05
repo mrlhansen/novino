@@ -1,4 +1,3 @@
-// #include <kernel/storage/partmgr.h>
 #include <kernel/storage/blkdev.h>
 #include <kernel/storage/ahci.h>
 #include <kernel/vfs/devfs.h>
@@ -528,7 +527,6 @@ static int ahci_status(void *data, blkdev_t *blk, int ack)
 
     blk->bps = dev->disk.lss;
     blk->sectors = dev->disk.sectors;
-    blk->offset = 0;
     blk->flags = 0;
 
     if(!dev->atapi)
@@ -547,14 +545,14 @@ static int ahci_status(void *data, blkdev_t *blk, int ack)
     }
     else if(dev->status == BLKDEV_MEDIA_CHANGED)
     {
+        blk->bps = dev->disk.lss;
+        blk->sectors = dev->disk.sectors;
+        blk->flags |= BLKDEV_MEDIA_CHANGED;
+
         if(ack)
         {
             dev->status = 0;
             status = 0;
-        }
-        else
-        {
-            blk->flags |= BLKDEV_MEDIA_CHANGED;
         }
     }
 
@@ -687,10 +685,18 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
 
     sprintf(name, "disk%d", dev->id);
     entry = devfs_block_register(parent, name, &ops, dev, 0);
-
-    if(dev->atapi == 0)
+    if(!entry)
     {
-        // partmgr_read_table(parent, entry);
+        return -ENOMEM;
+    }
+
+    if(dev->atapi)
+    {
+        blkdev_alloc(entry, 0, 0, false);
+    }
+    else
+    {
+        blkdev_alloc(entry, 0, 0, true);
     }
 
     return 0;

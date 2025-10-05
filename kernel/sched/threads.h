@@ -44,7 +44,6 @@ struct thread {
     struct {                    // Used for IRQ signals
         int recv;               // Signal received
         int wait;               // Waiting for signal
-        int core;               // Core ID of waiting thread
         spinlock_t lock;        // Synchronization lock
     } sig;
     struct {                    // Used in swapgs

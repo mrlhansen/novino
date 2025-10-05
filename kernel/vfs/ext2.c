@@ -2328,12 +2328,14 @@ static void *ext2fs_mount(devfs_t *dev, inode_t *inode) // make a helper functio
     status = blkdev_open(dev);
     if(status < 0)
     {
+        kp_info("ext2", "mount: failed to open block device");
         return 0;
     }
 
     fs = kzalloc(sizeof(ext2_t) + 1024);
     if(!fs)
     {
+        kp_info("ext2", "mount: failed to allocate memory");
         kfree(fs);
         blkdev_close(dev);
         return 0;
@@ -2343,6 +2345,7 @@ static void *ext2fs_mount(devfs_t *dev, inode_t *inode) // make a helper functio
     status = blkdev_read(dev, 2, 2, sb);
     if(status < 0)
     {
+        kp_info("ext2", "mount: failed to read superblock (status %d)", status);
         kfree(fs);
         blkdev_close(dev);
         return 0;
@@ -2350,6 +2353,7 @@ static void *ext2fs_mount(devfs_t *dev, inode_t *inode) // make a helper functio
 
     if(sb->signature != 0xEF53)
     {
+        kp_info("ext2", "mount: invalid signature");
         kfree(fs);
         blkdev_close(dev);
         return 0;
@@ -2373,6 +2377,7 @@ static void *ext2fs_mount(devfs_t *dev, inode_t *inode) // make a helper functio
 
     if(version > 2)
     {
+        kp_info("ext2", "mount: unsupported ext%d filesystem", version);
         kfree(fs);
         blkdev_close(dev);
         return 0;

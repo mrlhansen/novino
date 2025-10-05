@@ -2,6 +2,7 @@
 #include <kernel/vfs/devfs.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/mem/heap.h>
+#include <kernel/time/time.h>
 #include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <string.h>
@@ -45,9 +46,12 @@ static devfs_t *devfs_alloc(const char *name, int flags)
         inode->mode = 0644;
     }
 
-    inode->mtime = 0; // TODO
-    inode->ctime = 0; // TODO
-    inode->atime = 0; // TODO
+    timeval_t tv;
+    gettime(&tv);
+
+    inode->mtime = tv.tv_sec;
+    inode->ctime = tv.tv_sec;
+    inode->atime = tv.tv_sec;
 
     return entry;
 }
@@ -124,6 +128,7 @@ static devfs_t *devfs_register(devfs_t *parent, const char *name, int flags, sta
         }
     }
 
+    dev->parent = parent;
     dev->next = parent->child;
     parent->child = dev;
 
@@ -149,12 +154,6 @@ devfs_t *devfs_stream_register(devfs_t *parent, const char *name, devfs_ops_t *o
 devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *ops, void *data, stat_t *stat)
 {
     devfs_t *dev;
-    blkdev_t bd;
-
-    if(!ops->status)
-    {
-        return 0;
-    }
 
     dev = devfs_register(parent, name, I_BLOCK, stat);
     if(dev == 0)
@@ -164,12 +163,6 @@ devfs_t *devfs_block_register(devfs_t *parent, const char *name, devfs_blk_t *op
 
     dev->data = data;
     dev->blk = ops;
-
-    ops->status(data, &bd, 1);
-
-    dev->inode.blksz  = bd.bps;
-    dev->inode.blocks = bd.sectors;
-    dev->inode.size   = bd.bps * bd.sectors;
 
     return dev;
 }
@@ -199,6 +192,7 @@ devfs_t *devfs_mkdir(devfs_t *parent, const char *name)
         return 0;
     }
 
+    dev->parent = parent;
     dev->next = parent->child;
     parent->child = dev;
 
@@ -424,6 +418,7 @@ void devfs_init()
     {
         kp_panic("devfs", "unable to alloc devfs root node");
     }
+    root->parent = root;
 
     vfs_register("devfs", &ops);
 }

@@ -170,7 +170,6 @@ struct vfs_mp {
 typedef struct devfs {
     char name[MAX_SFN];    // Name of device
     inode_t inode;         // Device inode
-    lock_t lock;           // Lock for exclusive access
     blkdev_t *bd;          // Block device descriptor
     union {
         devfs_ops_t *ops;  // Stream operations
@@ -179,6 +178,7 @@ typedef struct devfs {
     void *data;            // Private device data
     devfs_t *next;         // Link to next
     devfs_t *child;        // Link to children
+    devfs_t *parent;       // Link to parent
 };
 
 // Internal struct for VFS path iteration
