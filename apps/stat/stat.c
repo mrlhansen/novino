@@ -24,12 +24,12 @@ int main(int argc, char *argv[])
     }
 
     printf("File   : %s\n", argv[1]);
-    printf("Size   : %d\n", st.st_size);
+    printf("Size   : %lu\n", st.st_size);
     printf("Mode   : %#o\n", st.st_mode);
-    printf("Blocks : %d x %d\n", st.st_blocks, st.st_blksize);
-    printf("Inode  : %d\n", st.st_ino);
-    printf("UID    : %d\n", st.st_uid);
-    printf("GID    : %d\n", st.st_gid);
+    printf("Blocks : %lu x %u\n", st.st_blocks, st.st_blksize);
+    printf("Inode  : %u\n", st.st_ino);
+    printf("UID    : %u\n", st.st_uid);
+    printf("GID    : %u\n", st.st_gid);
     tm = gmtime(&st.st_atime);
     printf("Access : %s", asctime(tm));
     tm = gmtime(&st.st_mtime);

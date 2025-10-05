@@ -50,7 +50,7 @@ void e820_init(size_t addr, size_t size)
         region = e820.region + i;
         end = region->start + region->length;
 
-        if(region->type > 6)
+        if(region->type > 5)
         {
             region->type = E820_RESERVED; // mark unknown entries as reserved
         }

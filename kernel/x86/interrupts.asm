@@ -135,6 +135,27 @@ isr_spurious:
     iretq
 .end:
 
+global switch_task:function (switch_task.end - switch_task)
+switch_task:
+    pushf
+    cli
+
+    mov rax, rsp      ; rax, rcx, rdx are caller save
+    mov rcx, ss
+    mov rdx, cs
+
+    push rcx          ; ss
+    push rax          ; rsp
+    pushf             ; rflags
+    push rdx          ; cs
+    push .next        ; rip
+
+    jmp isr_schedule
+.next:
+    popf
+    ret
+.end:
+
 extern xsave_support
 global isr_schedule:function (isr_schedule.end - isr_schedule)
 isr_schedule:

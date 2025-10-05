@@ -26,10 +26,10 @@ typedef struct {
     thread_t *thread_current; // Currently executed thread
     thread_t *thread_idle;    // Idle thread for this core
     spinlock_t lock;          // Global lock for accessing this struct
-    yield_t yield;            // Used for spinning until yielding
     tss_t *tss;               // TSS descripter for this core
 } scheduler_t;
 
+void switch_task();
 thread_t *scheduler_get_thread();
 
 void scheduler_mask();

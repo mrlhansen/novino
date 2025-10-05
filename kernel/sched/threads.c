@@ -133,59 +133,47 @@ void thread_unblock(thread_t *thread)
 
 void thread_signal(thread_t *thread)
 {
+    spinlock_t *lock;
     uint32_t flags;
-    int sched = 1;
 
-    acquire_safe_lock(&thread->sig.lock, &flags);
+    lock = &thread->sig.lock;
+    acquire_safe_lock(lock, &flags);
 
     if(thread->sig.wait)
     {
         thread->sig.wait = 0;
         thread->sig.recv = 0;
 
-        // there are 3 different scenarios when unblocking the thread
+        // there are 2 different scenarios when unblocking the thread
         // 1. yielding has already finished and we simply unblock the thread
-        // 2. yielding has not finished, and we interrupted the yielding on the same core
-        // 3. yielding has not finished, but it is still ongoing on another core
+        // 2. yielding is current ongoing on another core, so we need to wait
 
-        if(thread->yield)
+        while(thread->yield)
         {
-            if(smp_core_id() == thread->sig.core)
-            {
-                thread->state = RUNNING;
-                sched = 0;
-            }
-            else
-            {
-                while(thread->yield)
-                {
-                    asm("pause");
-                }
-            }
+            asm("pause");
         }
 
         list_remove(&hold, thread);
-        if(sched)
-        {
-            thread->state = READY;
-            scheduler_append(thread);
-        }
+        thread->state = READY;
+        scheduler_append(thread);
     }
     else
     {
         thread->sig.recv = 1;
     }
 
-    release_safe_lock(&thread->sig.lock, &flags);
+    release_safe_lock(lock, &flags);
 }
 
 void thread_wait()
 {
+    spinlock_t *lock;
     thread_t *thread;
     uint32_t flags;
 
     thread = thread_handle();
-    acquire_safe_lock(&thread->sig.lock, &flags);
+    lock = &thread->sig.lock;
+    acquire_safe_lock(lock, &flags);
 
     if(thread->sig.recv)
     {
@@ -201,13 +189,12 @@ void thread_wait()
         list_append(&hold, thread);
     }
 
-    release_safe_lock(&thread->sig.lock, &flags);
-
-    // we assume that this is a high priority thread without preemption
-    // otherwise preemption can happen here before yielding
+    release_lock(lock);
 
     if(thread->yield)
     {
         scheduler_yield();
     }
+
+    restore_interrupts(&flags);
 }

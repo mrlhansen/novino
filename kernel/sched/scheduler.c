@@ -21,7 +21,7 @@ static void set_scheduler(scheduler_t *scheduler)
 static scheduler_t *get_scheduler()
 {
     scheduler_t *scheduler;
-    asm volatile ("movq %%dr3, %0" : "=r" (scheduler));
+    asm volatile("movq %%dr3, %0" : "=r" (scheduler));
     return scheduler;
 }
 
@@ -36,7 +36,7 @@ static void scheduler_set_thread(scheduler_t *scheduler, thread_t *thread)
 thread_t *scheduler_get_thread()
 {
     scheduler_t *scheduler;
-    asm volatile ("movq %%dr3, %0" : "=r" (scheduler));
+    asm volatile("movq %%dr3, %0" : "=r" (scheduler));
     return scheduler->thread_current;
 }
 
@@ -59,11 +59,8 @@ void scheduler_stop()
 
 void scheduler_yield()
 {
-    scheduler_t *scheduler;
-    scheduler = get_scheduler();
-    scheduler->yield = 1;
-    lapic_write(APIC_ICR0, 0x44020);
-    while(scheduler->yield);
+    scheduler_stop();
+    switch_task();
 }
 
 static void scheduler_preempt(scheduler_t *scheduler)
@@ -243,8 +240,6 @@ uint64_t schedule_handler(uint64_t rsp)
     thread_t *thread;
 
     scheduler = get_scheduler();
-    scheduler->yield = 0;
-
     elapsed = scheduler_elapsed_time(scheduler);
     thread = scheduler->thread_current;
 
