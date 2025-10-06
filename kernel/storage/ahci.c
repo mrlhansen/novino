@@ -435,6 +435,39 @@ static int ahci_atapi_read_dma(ahci_dev_t *dev, uint64_t lba, uint32_t count)
     return 0;
 }
 
+static int ahci_flush_cache(ahci_dev_t *dev)
+{
+    ahci_fis_t fis;
+    int status;
+
+    if((dev->disk.flags & ATA_FLAG_WCE) == 0)
+    {
+        return 0;
+    }
+
+    fis.type = FIS_TYPE_REG_H2D;
+    fis.atapi = 0;
+    fis.command = ATA_CMD_FLUSH_CACHE_EXT;
+    fis.features = 0;
+    fis.device = 0;
+    fis.lba = 0;
+    fis.count = 0;
+
+    dev->irq.type = PxIS_DHRS;
+    dev->irq.signal = 1;
+
+    status = ahci_submit_command(dev, &fis, 0, 0, 0);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    thread_wait();
+    // PxIS_TFES set?
+
+    return 0;
+}
+
 static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
 {
     ahci_fis_t fis;
@@ -464,6 +497,16 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
 
     thread_wait();
     // PxIS_TFES set?
+
+    if(write)
+    {
+        // TODO: consider making a blkdev flush function to avoid flushing on every write
+        status = ahci_flush_cache(dev);
+        if(status < 0)
+        {
+            kp_info("ahci", "flush failed");
+        }
+    }
 
     return 0;
 }

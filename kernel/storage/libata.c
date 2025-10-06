@@ -109,6 +109,16 @@ void libata_identify(uint16_t *info, ata_info_t *ret)
             }
         }
 
+        if(info[85] & (1 << 5))
+        {
+            flags |= ATA_FLAG_WCE;
+        }
+
+        if(info[85] & (1 << 6))
+        {
+            flags |= ATA_FLAG_DRA;
+        }
+
         if(info[106] & (1 << 12))
         {
             lss = info[118];
@@ -157,6 +167,14 @@ void libata_print(ata_info_t *info, const char *name, int bus_id, int dev_id)
     kp_info(name, "%s: %s drive (revision %d)", buf, (info->atapi ? "ATAPI" : "ATA"), info->revision);
     kp_info(name, "%s: %s, %s, %s", buf, info->model, info->serial, info->firmware);
     kp_info(name, "%s: sector size: %d physical, %d logical", buf, info->pss, info->lss);
+
+    if(!info->atapi)
+    {
+        kp_info(name, "%s: read cache: %s, write cache: %s", buf,
+            (info->flags & ATA_FLAG_DRA) ? "enabled" : "disabled",
+            (info->flags & ATA_FLAG_WCE) ? "enabled" : "disabled"
+        );
+    }
 
     if(size == 0)
     {

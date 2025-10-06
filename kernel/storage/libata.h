@@ -65,6 +65,8 @@ enum {
     ATA_FLAG_LBA28  = (1 << 2), // Supports 28-bit addressing
     ATA_FLAG_LBA48  = (1 << 3), // Supports 48-bit addressing
     ATA_FLAG_DMADIR = (1 << 4), // Direction bit required in packet command for DMA transfers
+    ATA_FLAG_DRA    = (1 << 5), // Device Read-Ahead enabled
+    ATA_FLAG_WCE    = (1 << 6), // Write Cache Enabled
 };
 
 void libata_identify(uint16_t*, ata_info_t*);

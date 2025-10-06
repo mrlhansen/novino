@@ -7,6 +7,8 @@
 #include <kernel/errno.h>
 #include <string.h>
 
+#define align_size(s,a)  ((s + a - 1) & -(a))
+
 //
 // Context caching, reading and writing of blocks
 //
@@ -1481,15 +1483,18 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
 {
     ext2_inode_t *inode;
     ext2_dentry_t *dp;
+    ext2_sb_t *sb;
     ext2_t *fs;
     inode_t *obj;
     uint32_t block;
     int status, count;
-    int req, avail;
+    int req, used, avail;
 
     fs  = ctx->fs;
+    sb = fs->sb;
     obj = dent->inode;
-    req = strlen(dent->name) + sizeof(ext2_dentry_t);
+    req = sizeof(ext2_dentry_t) + strlen(dent->name);
+    req = align_size(req, 4);
 
     // read parent inode
     inode = ext2_inode_read(ctx, dir->ino, true);
@@ -1508,20 +1513,19 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     // look for empty slot
     while(dp = ext2_dirent_next(ctx, &block, 0), dp)
     {
+        used = 0;
         if(dp->inode)
         {
-            avail = dp->size - sizeof(ext2_dentry_t) - dp->length;
+            used = sizeof(ext2_dentry_t) + dp->length;
+            used = align_size(used, 4);
         }
-        else
-        {
-            avail = dp->size;
-        }
+        avail = dp->size - used;
 
         if(avail > req)
         {
             if(dp->inode)
             {
-                dp->size = sizeof(ext2_dentry_t) + dp->length;
+                dp->size = used;
                 dp = (void*)dp + dp->size;
                 dp->size = avail;
             }
@@ -1560,6 +1564,22 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     dp->inode = obj->ino;
     dp->length = strlen(dent->name);
     strncpy(dp->name, dent->name, dp->length);
+
+    if(sb->features_required & EXT2_REQ_DIRENT_TYPE)
+    {
+        if(obj->flags & I_FILE)
+        {
+            dp->type = 1;
+        }
+        else if(obj->flags & I_DIR)
+        {
+            dp->type = 2;
+        }
+        else if(obj->flags & I_SYMLINK)
+        {
+            dp->type = 7;
+        }
+    }
 
     // adjust parent inode
     ext2_inode_settime(inode, EXT2_MTIME);
@@ -1926,10 +1946,12 @@ static int ext2_mkdir(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
 {
     ext2_dentry_t *dp;
     ext2_inode_t *inode;
+    ext2_sb_t *sb;
     inode_t *obj;
     uint32_t bg;
     int status, size;
 
+    sb = ctx->fs->sb;
     obj = dent->inode;
     bg  = (dir->ino - 1) / ctx->fs->sb->inodes_per_group;
 
@@ -1974,7 +1996,13 @@ static int ext2_mkdir(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     dp->inode = obj->ino;
     dp->length = 1;
     dp->size = sizeof(ext2_dentry_t) + dp->length;
+    dp->size = align_size(dp->size , 4);
     dp->name[0] = '.';
+
+    if(sb->features_required & EXT2_REQ_DIRENT_TYPE)
+    {
+        dp->type = 2;
+    }
 
     size = ctx->fs->block_size - dp->size;
     dp = (void*)dp + dp->size;
@@ -1984,6 +2012,11 @@ static int ext2_mkdir(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     dp->size = size;
     dp->name[0] = '.';
     dp->name[1] = '.';
+
+    if(sb->features_required & EXT2_REQ_DIRENT_TYPE)
+    {
+        dp->type = 2;
+    }
 
     // synchronize inode data
     ext2_inode_getattr(ctx->fs, obj, inode, 0);
