@@ -88,7 +88,7 @@ int vesa_reinit(console_t*);
 void console_clear(console_t*);
 void console_refresh(console_t*);
 void console_set_flags(console_t*, int);
-void console_move_cursor(console_t*, int, int);
+void console_move_cursor(console_t*, int, int, bool);
 void console_set_color(console_t*, int, int);
 void console_putch(console_t*, int);
 void console_puts(console_t*, char*);

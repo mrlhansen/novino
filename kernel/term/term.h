@@ -8,6 +8,7 @@ enum {
     NOBUF  = (1 << 2), // Disable line buffering
     CURSOR = (1 << 3), // Show cursor
     WRAP   = (1 << 4), // Wrap horizontal cursor movements
+    NOSCR  = (1 << 5), // Disable scrolling
 };
 
 enum {

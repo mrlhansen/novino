@@ -27,13 +27,16 @@ static inline void console_scroll(console_t *c)
         return;
     }
 
-    if(vesamode)
+    if((c->flags & NOSCR) == 0)
     {
-        vesa_scroll(c);
-    }
-    else
-    {
-        vga_scroll(c);
+        if(vesamode)
+        {
+            vesa_scroll(c);
+        }
+        else
+        {
+            vga_scroll(c);
+        }
     }
 
     c->pos_y--;
@@ -122,13 +125,16 @@ void console_set_flags(console_t *c, int flags)
     release_lock(&c->lock);
 }
 
-void console_move_cursor(console_t *c, int x, int y)
+void console_move_cursor(console_t *c, int x, int y, bool rela)
 {
     acquire_lock(&c->lock);
     console_toggle_cursor(c);
 
-    x = x + c->pos_x;
-    y = y + c->pos_y;
+    if(rela)
+    {
+        x = x + c->pos_x;
+        y = y + c->pos_y;
+    }
 
     if(c->flags & WRAP)
     {

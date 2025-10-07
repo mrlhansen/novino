@@ -180,22 +180,38 @@ static void handle_ansi_escape(vts_t *vts, int ch, int a, int b)
     else if(ch == 'A') // CUU = Cursor Up
     {
         a = max(a, 1);
-        console_move_cursor(vts->console, 0, -a);
+        console_move_cursor(vts->console, 0, -a, true);
     }
     else if(ch == 'B') // CUD = Cursor Down
     {
         a = max(a, 1);
-        console_move_cursor(vts->console, 0, a);
+        console_move_cursor(vts->console, 0, a, true);
     }
     else if(ch == 'C') // CUF = Cursor Forward
     {
         a = max(a, 1);
-        console_move_cursor(vts->console, a, 0);
+        console_move_cursor(vts->console, a, 0, true);
     }
     else if(ch == 'D') // CUD = Cursor Back
     {
         a = max(a, 1);
-        console_move_cursor(vts->console, -a, 0);
+        console_move_cursor(vts->console, -a, 0, true);
+    }
+    else if(ch == 'E') // CNL = Cursor Next Line
+    {
+        a = max(a, 1);
+        console_move_cursor(vts->console, 0, a, true);
+    }
+    else if(ch == 'F') // CPL = Cursor Previous Line
+    {
+        a = max(a, 1);
+        console_move_cursor(vts->console, 0, -a, true);
+    }
+    else if(ch == 'H') // CUP = Cursor Position
+    {
+        a = max(a, 1);
+        b = max(b, 1);
+        console_move_cursor(vts->console, b-1, a-1, false);
     }
     else if(ch == 'm') // SGR = Select Graphic Rendition
     {
