@@ -148,7 +148,6 @@ static int str_convert(FILE *fp, int flags, int width, int precision, char *str)
     int rlen, len;
 
     len = strlen(str);
-    rlen = 0;
 
     if(flags & PRECISION)
     {
@@ -157,6 +156,8 @@ static int str_convert(FILE *fp, int flags, int width, int precision, char *str)
             len = precision;
         }
     }
+
+    rlen = len;
 
     if((flags & LEFT) == 0)
     {
@@ -168,8 +169,10 @@ static int str_convert(FILE *fp, int flags, int width, int precision, char *str)
         }
     }
 
-    fputs(str, fp);
-    rlen += len;
+    for(int i = 0; i < len; i++)
+    {
+        fputc(str[i], fp);
+    }
 
     while(width > len)
     {

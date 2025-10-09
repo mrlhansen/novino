@@ -64,7 +64,7 @@ void perror(const char *str);
 #define SEEK_END 2
 
 /* buffering */
-#define BUFSIZ 1024
+#define BUFSIZ 4096
 #define _IOFBF 0
 #define _IOLBF 1
 #define _IONBF 2
