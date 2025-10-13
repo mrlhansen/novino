@@ -76,10 +76,77 @@ static void remove_free_chunk(chunk_t *chunk)
     }
 }
 
+static void split_chunk(chunk_t *chunk, size_t size)
+{
+    chunk_t *next;
+
+    // check size
+    if(chunk->size < size + HEAP_DATA_ALIGN + HEAP_CHUNK_SIZE)
+    {
+        return;
+    }
+
+    // new free chunk
+    next = chunk_next(chunk, size);
+    next->prev = chunk;
+    next->next = chunk->next;
+    next->size = chunk_size(next);
+
+    // adjust chunk
+    chunk->next->prev = next;
+    chunk->next = next;
+    chunk->size = size;
+
+    // insert
+    insert_free_chunk(next);
+}
+
+static void glue_chunk(chunk_t *chunk, int prev, int next)
+{
+    int free;
+
+    // backwards
+    if(prev && chunk->prev->free)
+    {
+        remove_free_chunk(chunk);
+        remove_free_chunk(chunk->prev);
+
+        chunk->prev->size += chunk->size + HEAP_CHUNK_SIZE;
+        chunk->prev->next = chunk->next;
+        chunk->next->prev = chunk->prev;
+
+        insert_free_chunk(chunk->prev);
+        chunk = chunk->prev;
+    }
+
+    // forwards
+    if(next && chunk->next->free)
+    {
+        free = chunk->free;
+        if(free)
+        {
+            remove_free_chunk(chunk);
+        }
+        remove_free_chunk(chunk->next);
+
+        chunk->size += chunk->next->size + HEAP_CHUNK_SIZE;
+        chunk->next = chunk->next->next;
+        chunk->next->prev = chunk;
+
+        if(free)
+        {
+            insert_free_chunk(chunk);
+        }
+    }
+}
+
 static chunk_t *heap_expand(long size)
 {
     chunk_t *old, *new;
     int status;
+
+    // make room for header
+    size = size + HEAP_CHUNK_SIZE;
 
     // allocate memory
     old = (void*)(heap_end - HEAP_CHUNK_SIZE);
@@ -94,13 +161,22 @@ static chunk_t *heap_expand(long size)
     old->next = new;
     old->size = chunk_size(old);
     old->free = 1;
-    insert_free_chunk(old);
 
     // new rear guard
     new->prev = old;
     new->next = 0;
     new->size = 0;
     new->free = 0;
+
+    // insert
+    insert_free_chunk(old);
+
+    // merge when possible
+    if(old->prev->free)
+    {
+        old = old->prev;
+        glue_chunk(old, 0, 1);
+    }
 
     return old;
 }
@@ -122,62 +198,6 @@ static chunk_t *find_free_chunk(size_t size)
 
     // try to allocate more memory
     return heap_expand(size);
-}
-
-static void split_chunk(chunk_t *chunk, size_t size)
-{
-    chunk_t *next;
-
-    // check size
-    if(chunk->size < size + HEAP_DATA_ALIGN + HEAP_CHUNK_SIZE)
-    {
-        return;
-    }
-
-    // new free chunk
-    next = chunk_next(chunk, size);
-    next->prev = chunk;
-    next->next = chunk->next;
-    next->size = chunk_size(next);
-    insert_free_chunk(next);
-
-    // adjust chunk
-    chunk->next->prev = next;
-    chunk->next = next;
-    chunk->size = size;
-}
-
-static void glue_chunk(chunk_t *chunk, int prev, int next)
-{
-    // backwards
-    if(prev && chunk->prev->free)
-    {
-        remove_free_chunk(chunk);
-        remove_free_chunk(chunk->prev);
-
-        chunk->prev->size += chunk->size + HEAP_CHUNK_SIZE;
-        chunk->prev->next = chunk->next;
-        chunk->next->prev = chunk->prev;
-
-        insert_free_chunk(chunk->prev);
-        chunk = chunk->prev;
-    }
-
-    // forwards
-    if(next && chunk->next->free)
-    {
-        remove_free_chunk(chunk);
-        remove_free_chunk(chunk->next);
-
-        chunk->size += chunk->next->size + HEAP_CHUNK_SIZE;
-        chunk->next = chunk->next->next;
-        if(chunk->next)
-        {
-            chunk->next->prev = chunk;
-        }
-
-        insert_free_chunk(chunk);
-    }
 }
 
 int __libc_heap_init()

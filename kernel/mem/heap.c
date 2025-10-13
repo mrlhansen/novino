@@ -100,10 +100,7 @@ static void glue_chunk(chunk_t *chunk, int prev, int next)
 
         chunk->size += chunk->next->size + HEAP_HEADER_SIZE;
         chunk->next = chunk->next->next;
-        if(chunk->next)
-        {
-            chunk->next->prev = chunk;
-        }
+        chunk->next->prev = chunk;
 
         insert_free_chunk(chunk);
     }
@@ -148,6 +145,9 @@ static chunk_t *heap_expand(size_t size)
     chunk_t *old;
     chunk_t *new;
 
+    // make room for header
+    size = size + HEAP_HEADER_SIZE;
+
     // allocate memory
     old = (void*)(heap.end - HEAP_HEADER_SIZE);
     if(heap_sbrk(size) < size)
@@ -160,13 +160,15 @@ static chunk_t *heap_expand(size_t size)
     old->next = new;
     old->size = chunk_size(old);
     old->free = 1;
-    insert_free_chunk(old);
 
     // new rear guard
     new->prev = old;
     new->next = 0;
     new->size = 0;
     new->free = 0;
+
+    // insert
+    insert_free_chunk(old);
 
     // merge when possible
     if(old->prev->free)
