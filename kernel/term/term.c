@@ -16,9 +16,6 @@
 // VT = 6 (F7) normal terminal
 // VT = 7 (F8) graphical interface
 
-// https://en.wikipedia.org/wiki/ANSI_escape_code
-// https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences
-
 // Active VT
 static int vtnum = 0;
 static vts_t *vts = 0;

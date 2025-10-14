@@ -27,7 +27,7 @@ static inline void console_scroll(console_t *c)
         return;
     }
 
-    if((c->flags & NOSCR) == 0)
+    if((c->flags & NOSCRL) == 0)
     {
         if(vesamode)
         {

@@ -8,7 +8,7 @@ int ioctl(int fd, size_t op, ...)
     size_t arg;
     va_list va;
 
-    va_start(va, 1);
+    va_start(va, op);
     arg = va_arg(va, size_t);
     va_end(va);
 

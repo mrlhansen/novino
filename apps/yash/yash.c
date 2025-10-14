@@ -1,5 +1,4 @@
-#include <kernel/term/term.h>
-
+#include <novino/termio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -101,85 +100,11 @@ static int parse_cmdline(char *str)
     return count;
 }
 
-static int yash_parse_escape(char *str, int *key, int *va, int *vb)
-{
-    int csi = 0;
-    int len = 0;
-    int a = 0;
-    int b = -1;
-    int ch;
-// we should probably check immediate if char #2 is [
-    while(*str)
-    {
-        ch = *str++;
-        len++;
-
-        if(csi)
-        {
-            if(ch >= 0x40 && ch <= 0x7E)
-            {
-                break;
-            }
-            else if(ch == ';')
-            {
-                b = a;
-                a = 0;
-            }
-            else
-            {
-                a = 10*a + ctoi(ch);
-            }
-        }
-        else if(ch == '[')
-        {
-            csi = 1;
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    if(csi)
-    {
-        *key = ch;
-        if(b > 0)
-        {
-            *va = b;
-            *vb = a;
-        }
-        else
-        {
-            *va = a;
-            *vb = b;
-        }
-    }
-    else
-    {
-        *key = 0;
-    }
-
-    return len;
-}
-
-static char *yash_gets_read()
-{
-    static char buf[64];
-    int sz;
-
-    sz = read(0, buf, 63);
-    if(sz == 0)
-    {
-        return NULL;
-    }
-    buf[sz] = '\0';
-
-    return buf;
-}
-
 static char *yash_gets(char *str)
 {
     static int flags = 0;
+    static char buf[64];
+
     int hpos = hist_len; // local history position
     int hoff = 0;        // offset in history ring
     int cont = 1;        // continue
@@ -194,11 +119,11 @@ static char *yash_gets(char *str)
     }
 
     // terminal flags
-    if(flags == 0)
+    if(!flags)
     {
-        ioctl(0, TIOGETFLAGS, &flags);
+        tiogetflags(&flags);
     }
-    ioctl(0, TIOSETFLAGS, NOBUF | CURSOR | WRAP);
+    tiosetflags(TIONOBUF | TIOCURSOR | TIOWRAP);
 
     // null terminate
     *str = '\0';
@@ -206,7 +131,7 @@ static char *yash_gets(char *str)
     // read command
     while(cont)
     {
-        char *seq = yash_gets_read();
+        char *seq = tiogets(buf, sizeof(buf));
         if(seq == 0)
         {
             return NULL;
@@ -220,7 +145,9 @@ static char *yash_gets(char *str)
             {
                 char *hstr;
                 int a, b;
-                seq += yash_parse_escape(seq, &ch, &a, &b);
+
+                seq -= 1;
+                seq += tiogetescape(seq, &ch, &a, &b);
 
                 if(ch == 'A') // up arrow
                 {
@@ -379,7 +306,7 @@ static char *yash_gets(char *str)
     }
 
     // restore flags
-    ioctl(0, TIOSETFLAGS, flags);
+    tiosetflags(flags);
 
     // push command to history
     if(*str)
