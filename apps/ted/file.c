@@ -118,7 +118,6 @@ file_t *file_read(const char *filename)
     return file;
 }
 
-
 int file_write(const char *filename, file_t *file)
 {
     line_t *line;

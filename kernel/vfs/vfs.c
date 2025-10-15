@@ -889,6 +889,20 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
+    if(flags & O_TRUNC)
+    {
+        if((flags & O_WRITE) == 0)
+        {
+            return -EINVAL;
+        }
+        if(fs->ops->truncate == 0)
+        {
+            return -ENOTSUP;
+        }
+    }
+
+    // append is not implemented
+
     fd = fd_create(0);
     fd->file->flags = flags;
     fd->file->dentry = dp;
@@ -906,14 +920,11 @@ int vfs_open(const char *pathname, int flags)
 
     if(flags & O_TRUNC)
     {
-        if(fs->ops->truncate)
+        status = fs->ops->truncate(ip);
+        if(status < 0)
         {
-            status = fs->ops->truncate(ip);
-            if(status < 0)
-            {
-                fd_delete(fd);
-                return status;
-            }
+            fd_delete(fd);
+            return status;
         }
     }
 

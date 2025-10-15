@@ -215,6 +215,11 @@ void vesa_putch(console_t *con, int ch)
     int x, y, x0, y0;
     uint8_t *data;
 
+    if(ch > 127)
+    {
+        ch = psf_unicode(&font, ch);
+    }
+
     data = font.glyphs + (ch * font.bytes_per_glyph);
     x0 = con->pos_x * (font.width + xspace);
     y0 = con->pos_y * (font.height + yspace);
