@@ -259,6 +259,7 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
         return 0;
     }
 
+    status = 0;
     parent = path->root;
     *dp = 0;
 
@@ -286,7 +287,6 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             continue;
         }
 
-        status = 0;
         child = dcache_lookup(parent, path->curr);
 
         if(child)
@@ -901,6 +901,19 @@ int vfs_open(const char *pathname, int flags)
         {
             fd_delete(fd);
             return status;
+        }
+    }
+
+    if(flags & O_TRUNC)
+    {
+        if(fs->ops->truncate)
+        {
+            status = fs->ops->truncate(ip);
+            if(status < 0)
+            {
+                fd_delete(fd);
+                return status;
+            }
         }
     }
 
