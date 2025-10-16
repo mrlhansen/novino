@@ -8,6 +8,7 @@
 typedef unsigned long size_t;
 typedef signed long ssize_t;
 typedef signed long ptrdiff_t;
+typedef unsigned int wchar_t;
 
 #ifndef offsetof
 #define offsetof(st,m) __builtin_offsetof(st,m)

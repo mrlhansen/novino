@@ -58,4 +58,9 @@ void *bsearch(const void *key, const void *base, size_t num, size_t size, int (*
 /* non-standard */
 int ctoi(int ch);
 
+/* multibyte */
+int mblen(const char *s, size_t n);
+int mbtowc(wchar_t *wc, const char *src, size_t n);
+int wctomb(char *s, wchar_t wc);
+
 #endif
