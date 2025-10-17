@@ -15,7 +15,7 @@ int wctomb(char *s, wchar_t wc)
     // U+0080 to U+07FF
     if(wc < 0x800)
     {
-        s[0] = 0xC0 | ((wc >> 6) & 0x3F);
+        s[0] = 0xC0 | (wc >> 6);
         s[1] = 0x80 | (wc & 0x3F);
         return 2;
     }
@@ -32,7 +32,7 @@ int wctomb(char *s, wchar_t wc)
     // U+0800 to U+FFFF
     if(wc < 0x10000)
     {
-        s[0] = 0xE0 | ((wc >> 12) & 0x1F);
+        s[0] = 0xE0 | (wc >> 12);
         s[1] = 0x80 | ((wc >> 6) & 0x3F);
         s[2] = 0x80 | (wc & 0x3F);
         return 3;
@@ -42,7 +42,7 @@ int wctomb(char *s, wchar_t wc)
     // U+010000 to U+10FFFF
     if(wc < 0x110000)
     {
-        s[0] = 0xF0 | ((wc >> 18) & 0x0F);
+        s[0] = 0xF0 | (wc >> 18);
         s[1] = 0x80 | ((wc >> 12) & 0x3F);
         s[2] = 0x80 | ((wc >> 6) & 0x3F);
         s[3] = 0x80 | (wc & 0x3F);

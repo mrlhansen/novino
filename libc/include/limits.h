@@ -8,7 +8,7 @@
 #define CHAR_MIN  (-128)
 #define CHAR_MAX  (127)
 
-#define MB_LEN_MAX 1
+#define MB_LEN_MAX 6
 
 #define SHRT_MIN  (-32768)
 #define SHRT_MAX  (32767)

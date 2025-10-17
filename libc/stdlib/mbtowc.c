@@ -6,9 +6,9 @@
 // 3-byte : 1110xxxx 10yyyyyy 10zzzzzz (4+2x6 bits)
 // 4-byte : 11110xxx 10yyyyyy 10zzzzzz 10vvvvvv (3+3x6 bits)
 
-int mbtowc(wchar_t *wc, const char *src, size_t n)
+int mbtowc(wchar_t *wc, const char *str, size_t n)
 {
-    const unsigned char *s = (const void*)src;
+    const unsigned char *s = (const void*)str;
     wchar_t val = *s++;
     wchar_t ch = 0;
     size_t len = 1;

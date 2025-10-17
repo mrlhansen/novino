@@ -13,6 +13,7 @@ typedef struct {
     long rem;
 } ldiv_t;
 
+#define MB_CUR_LEN 4
 #define RAND_MAX 2147483647
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
