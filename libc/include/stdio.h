@@ -8,10 +8,12 @@ typedef long fpos_t;
 typedef struct __libc_fd FILE;
 
 /* standard streams */
+
 extern FILE *stdin;
 extern FILE *stdout;
 
 /* file operations */
+
 FILE *fopen(const char *filename, const char *mode);
 int fclose(FILE *fp);
 size_t fread(void *ptr, size_t size, size_t count, FILE *fp);
@@ -40,10 +42,13 @@ char *gets(char *str);
 int puts(const char *str);
 
 /* formatted print */
+
 int printf(const char *fmt, ...);
 int sprintf(char *str, const char *fmt, ...);
+int snprintf(char *str, size_t n, const char *fmt, ...);
 int fprintf(FILE *fp, const char *fmt, ...);
 int vsprintf(char *str, const char *fmt, va_list args);
+int vsnprintf(char *str, size_t n, const char *fmt, va_list args);
 int vfprintf(FILE *fp, const char *fmt, va_list args);
 
 int scanf(const char *fmt, ...);
@@ -53,17 +58,21 @@ int vsscanf(const char *str, const char *fmt, va_list args);
 int vfscanf(FILE *fp, const char *fmt, va_list args);
 
 /* error handling */
+
 void perror(const char *str);
 
 /* end of file */
+
 #define EOF (-1)
 
 /* used with fseek */
+
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
 
 /* buffering */
+
 #define BUFSIZ 4096
 #define _IOFBF 0
 #define _IOLBF 1

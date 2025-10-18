@@ -1,3 +1,4 @@
+#include <_stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -12,6 +13,30 @@
 #define ZEROPAD   (1 << 5)
 #define PRECISION (1 << 6)
 #define UPPERCASE (1 << 7)
+
+static void _fputc(int ch, FILE *fp)
+{
+    if(fp->fd < 0)
+    {
+        if(fp->b.pos < fp->b.end)
+        {
+            *fp->b.pos++ = ch;
+        }
+    }
+    else
+    {
+        fputc(ch, fp);
+    }
+}
+
+static void _fputs(const char *str, FILE *fp)
+{
+    while(*str)
+    {
+        _fputc(*str, fp);
+        str++;
+    }
+}
 
 static void itoa(size_t value, char *buffer, int base)
 {
@@ -78,7 +103,7 @@ static int int_convert(FILE *fp, size_t num, int base, char *leading, int flags,
     {
         if(sign)
         {
-            fputc(sign, fp);
+            _fputc(sign, fp);
             rlen++;
             sign = 0;
         }
@@ -87,7 +112,7 @@ static int int_convert(FILE *fp, size_t num, int base, char *leading, int flags,
         {
             if(slen)
             {
-                fputs(leading, fp);
+                _fputs(leading, fp);
                 rlen += slen;
                 width += slen;
             }
@@ -96,7 +121,7 @@ static int int_convert(FILE *fp, size_t num, int base, char *leading, int flags,
 
         while(width > len)
         {
-            fputc('0', fp);
+            _fputc('0', fp);
             rlen++;
             width--;
         }
@@ -105,7 +130,7 @@ static int int_convert(FILE *fp, size_t num, int base, char *leading, int flags,
     {
         while(width > len)
         {
-            fputc(' ', fp);
+            _fputc(' ', fp);
             rlen++;
             width--;
         }
@@ -113,29 +138,29 @@ static int int_convert(FILE *fp, size_t num, int base, char *leading, int flags,
 
     if(sign)
     {
-        fputc(sign, fp);
+        _fputc(sign, fp);
         rlen++;
     }
 
     if(flags & SPECIAL)
     {
-        fputs(leading, fp);
+        _fputs(leading, fp);
         rlen += slen;
     }
 
     while(precision > 0)
     {
-        fputc('0', fp);
+        _fputc('0', fp);
         rlen++;
         precision--;
     }
 
-    fputs(temp, fp);
+    _fputs(temp, fp);
     rlen += len;
 
     while(width > len)
     {
-        fputc(' ', fp);
+        _fputc(' ', fp);
         rlen++;
         width--;
     }
@@ -163,7 +188,7 @@ static int str_convert(FILE *fp, int flags, int width, int precision, char *str)
     {
         while(width > len)
         {
-            fputc(' ', fp);
+            _fputc(' ', fp);
             rlen++;
             width--;
         }
@@ -171,12 +196,12 @@ static int str_convert(FILE *fp, int flags, int width, int precision, char *str)
 
     for(int i = 0; i < len; i++)
     {
-        fputc(str[i], fp);
+        _fputc(str[i], fp);
     }
 
     while(width > len)
     {
-        fputc(' ', fp);
+        _fputc(' ', fp);
         rlen++;
         width--;
     }
@@ -350,20 +375,20 @@ int vfprintf(FILE *fp, const char *fmt, va_list args)
                     rlen += str_convert(fp, flags, width, precision, va_arg(args, char*));
                     break;
                 case '%':
-                    fputc('%', fp);
+                    _fputc('%', fp);
                     rlen++;
                     break;
                 case '\0':
                     continue;
                 default:
-                    fputc(*fmt, fp);
+                    _fputc(*fmt, fp);
                     rlen++;
                     break;
             }
         }
         else
         {
-            fputc(*fmt, fp);
+            _fputc(*fmt, fp);
             rlen++;
         }
 

@@ -9,13 +9,10 @@ int memcmp(const void *s1, const void *s2, size_t len)
     {
         if(*p1 != *p2)
         {
-            return (*p1 > *p2) ? 1 : -1;
+            return (*p1 < *p2) ? -1 : 1;
         }
-        else
-        {
-            p1++;
-            p2++;
-        }
+        p1++;
+        p2++;
     }
 
     return 0;

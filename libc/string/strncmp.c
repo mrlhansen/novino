@@ -1,20 +1,25 @@
 #include <string.h>
 
-int strncmp(const char *str1, const char *str2, size_t len)
+int strncmp(const char *s1, const char *s2, size_t len)
 {
-    while(len && *str1 && *str1 == *str2)
+    const unsigned char *p1 = (const void*)s1;
+    const unsigned char *p2 = (const void*)s2;
+
+    while(len && *p1 == *p2)
     {
-        str1++;
-        str2++;
+        if(*p1 == '\0')
+        {
+            return 0;
+        }
+        p1++;
+        p2++;
         len--;
     }
 
-    if(len == 0)
+    if(!len)
     {
         return 0;
     }
-    else
-    {
-        return (*str1 < *str2) ? -1 : 1;
-    }
+
+    return (*p1 < *p2) ? -1 : 1;
 }
