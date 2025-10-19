@@ -30,14 +30,18 @@ static inline void vesa_memcpy(uint64_t dst, uint64_t src, size_t len)
     }
 }
 
-static inline void vesa_flush_line(console_t *con, int x0, int x1, int y)
+static inline void vesa_flush_block(console_t *con, int x0, int x1, int y0, int y1)
 {
     size_t pos, memsz;
     if(con->active)
     {
-        pos = (y * con->bytes_per_line) + (x0 * con->bytes_per_pixel);
         memsz = (x1 - x0) * con->bytes_per_pixel;
-        vesa_memcpy(con->lfbaddr + pos, con->bufaddr + pos, memsz);
+        pos = (y0 * con->bytes_per_line) + (x0 * con->bytes_per_pixel);
+        for(int y = y0; y < y1; y++)
+        {
+            vesa_memcpy(con->lfbaddr + pos, con->bufaddr + pos, memsz);
+            pos = pos + con->bytes_per_line;
+        }
     }
 }
 
@@ -182,8 +186,9 @@ void vesa_clear(console_t *con)
     for(int y = 0; y < con->height; y++)
     {
         vesa_draw_line(con, 0, con->width, y, &con->bg);
-        vesa_flush_line(con, 0, con->width, y);
     }
+
+    vesa_flush_block(con, 0, con->width, 0, con->height);
 
     for(int i = 0; i < (con->max_x * con->max_y); i++)
     {
@@ -256,7 +261,6 @@ void vesa_putch(console_t *con, int ch)
             x++;
         }
 
-        vesa_flush_line(con, x0, x, y);
         x = x0;
         y++;
     }
@@ -264,10 +268,13 @@ void vesa_putch(console_t *con, int ch)
     for(int j = 0; j < yspace; j++)
     {
         vesa_draw_line(con, x, x + font.width + xspace, y, &con->bg);
-        vesa_flush_line(con, x, x + font.width + xspace, y);
         x = x0;
         y++;
     }
+
+    x = x0 + font.width + xspace;
+    y = y0 + font.height + yspace;
+    vesa_flush_block(con, x0, x, y0, y);
 
     row = con->pos_x + (con->pos_y * con->max_x);
     con->glyphs[row].ch = ch;

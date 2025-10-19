@@ -55,6 +55,10 @@ int main(int argc, char *argv[])
                 .offset = 0,
                 .pos = 0,
             },
+            .r = {
+                .all = 1,
+                .line = 0,
+            },
             .file = file,
         },
     };

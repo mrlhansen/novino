@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <ctype.h>
 
+int errno;
+
 #define LEFT      (1 << 0)
 #define PLUS      (1 << 1)
 #define MINUS     (1 << 2)

@@ -129,6 +129,7 @@ void textarea_enter(textarea_t *w)
     // adjust positions
     w->wy.pos++;
     w->wx.pos = 0;
+    w->r.all = 1;
 
     // file capacity
     if(file->size == file->cap)
@@ -152,7 +153,9 @@ void textarea_backspace(textarea_t *w)
         memmove(line->data + w->wx.pos - 1, line->data + w->wx.pos, line->size - w->wx.pos);
         line->size--;
         line->data[line->size] = '\0';
+
         w->wx.pos--;
+        w->r.line = 1;
     }
     else if(w->wy.pos > 0)
     {
@@ -178,6 +181,7 @@ void textarea_backspace(textarea_t *w)
         line->data[0] = '\0';
 
         w->wy.pos--;
+        w->r.all = 1;
     }
 }
 
@@ -193,7 +197,9 @@ void textarea_glyph(textarea_t *w, int key)
     line->data[w->wx.pos] = key;
     line->size++;
     line->data[line->size] = '\0';
+
     w->wx.pos++;
+    w->r.line = 1;
 
     if(line->size + 1 == line->cap)
     {

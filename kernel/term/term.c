@@ -231,13 +231,24 @@ static void handle_ansi_escape(vts_t *vts, int ch, int a, int b)
 
 void term_stdout(vts_t *vts, char *seq, size_t len)
 {
+    wchar_t ch;
     int csi = 0;
     int esc = 0;
-    int ch, a, b;
+    int s, a, b;
 
-    for(int i = 0; i < len; i++)
+    if(vts->flags & CURSOR)
     {
-        ch = seq[i];
+        console_set_flags(vts->console, vts->flags ^ CURSOR);
+    }
+
+    for(int i = 0; i < len;)
+    {
+        s = mbtowc(&ch, seq+i, len-i);
+        if(s < 0)
+        {
+            break;
+        }
+        i += s;
 
         if(csi)
         {
@@ -282,6 +293,11 @@ void term_stdout(vts_t *vts, char *seq, size_t len)
             console_putch(vts->console, ch);
             esc = 0;
         }
+    }
+
+    if(vts->flags & CURSOR)
+    {
+        console_set_flags(vts->console, vts->flags);
     }
 }
 

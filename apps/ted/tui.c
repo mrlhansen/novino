@@ -45,9 +45,13 @@ void tui_refresh(tui_t *tui)
     file_t *file;
     line_t *line;
     int lnum, row;
+    int xoff, yoff;
+    int s, e;
 
     w = &tui->w;
     file = w->file;
+    xoff = w->wx.offset;
+    yoff = w->wy.offset;
 
     // update cursor position
     w->x.pos = w->wx.pos - w->wx.offset;
@@ -74,12 +78,32 @@ void tui_refresh(tui_t *tui)
         w->wy.offset++;
     }
 
+    // only redraw when needed
+    xoff = xoff - w->wx.offset;
+    yoff = yoff - w->wy.offset;
+    s = 0;
+    e = 0;
+
+    if(xoff || yoff || w->r.all)
+    {
+        s = 0;
+        e = w->y.size;
+    }
+    else if(w->r.line)
+    {
+        s = w->y.pos;
+        e = s + 1;
+    }
+
     // refresh screen
     header(tui);
     footer(tui);
-    printf("\e[0m");
 
-    for(int i = 0; i < w->y.size; i++)
+    printf("\e[0m");
+    w->r.all = 0;
+    w->r.line = 0;
+
+    for(int i = s; i < e; i++)
     {
         lnum = w->wy.offset + i;
         row = 1 + w->y.offset + i;

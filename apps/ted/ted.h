@@ -31,6 +31,10 @@ typedef struct {
         int offset; // Offset for vertical scrolling
         int pos;    // Current line in file
     } wy;
+    struct {
+        int all;    // Refresh everything
+        int line;   // Refresh current line
+    } r;
     file_t *file;   // Data for textareaa
 } textarea_t;
 

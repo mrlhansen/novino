@@ -23,6 +23,7 @@ SOURCES += isdigit.c
 SOURCES += ctoi.c
 SOURCES += min.c
 SOURCES += max.c
+SOURCES += mbtowc.c
 SOURCES += gmtime.c
 SOURCES += mktime.c
 SOURCES += asctime.c
