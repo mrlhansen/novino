@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <unistd.h>
 
 pid_t getpid()

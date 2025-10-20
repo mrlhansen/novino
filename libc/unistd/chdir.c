@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 int chdir(const char *path)

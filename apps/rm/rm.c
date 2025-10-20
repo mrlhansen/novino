@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>

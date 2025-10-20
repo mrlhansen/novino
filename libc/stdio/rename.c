@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 int rename(const char *oldpath, const char *newpath)

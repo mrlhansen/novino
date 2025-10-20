@@ -1,5 +1,4 @@
-#include <kernel/errno.h>
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 int remove(const char *path)

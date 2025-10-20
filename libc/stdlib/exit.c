@@ -1,8 +1,6 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
+#include <_stdio.h>
 #include <stdlib.h>
-#include <stdio.h>
-
-//  All C streams (open with functions in <cstdio>) are closed (and flushed, if buffered), and all files created with tmpfile are removed.
 
 #define SLOTS_INCREMENT 20
 
@@ -38,12 +36,12 @@ int atexit(void (*func)())
 
 void exit(int status)
 {
-    // call atexit functions
     for(int i = index - 1; i >= 0; i--)
     {
         list[i].func();
     }
 
-    // exit
+    __libc_fd_exit();
+
     sys_exit(status);
 }

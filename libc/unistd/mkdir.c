@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 int mkdir(const char *path, int mode)

@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 ssize_t write(int fd, void *buf, size_t size)

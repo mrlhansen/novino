@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <errno.h>
 
 int rmdir(const char *path)

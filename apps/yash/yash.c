@@ -1,8 +1,9 @@
 #include <novino/termio.h>
+#include <novino/spawn.h>
+#include <novino/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <nonstd.h>
 #include <stdio.h>
 #include <ctype.h>
 

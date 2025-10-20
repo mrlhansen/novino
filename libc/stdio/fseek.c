@@ -1,4 +1,4 @@
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <_stdio.h>
 
 int fseek(FILE *fp, long offset, int origin)

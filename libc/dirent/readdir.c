@@ -1,5 +1,5 @@
 #include <kernel/vfs/types.h>
-#include <_syscall.h>
+#include <novino/syscalls.h>
 #include <_stdio.h>
 #include <dirent.h>
 #include <string.h>
