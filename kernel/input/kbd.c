@@ -12,9 +12,15 @@ static int repeat_code = 0;
 
 static int input_kbd_open(file_t *file)
 {
+    int rflags = 0;
     pipe_t *pipe;
 
-    pipe = pipe_create(0, O_NONBLOCK);
+    if(file->flags & O_NONBLOCK)
+    {
+        rflags = O_NONBLOCK;
+    }
+
+    pipe = pipe_create(rflags, O_NONBLOCK);
     if(pipe == 0)
     {
         return -EIO;

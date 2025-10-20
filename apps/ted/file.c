@@ -84,7 +84,9 @@ file_t *file_read(const char *filename)
     }
 
     line = file->line[0];
+    lnum = 0;
     pos = 0;
+
     while(pos < len)
     {
         ch = data[pos];

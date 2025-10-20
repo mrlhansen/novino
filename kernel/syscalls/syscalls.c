@@ -2,6 +2,7 @@
 #include <kernel/sched/process.h>
 #include <kernel/sched/threads.h>
 #include <kernel/sched/execve.h>
+#include <kernel/time/time.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/vfs/vfs.h>
@@ -278,6 +279,19 @@ static long sys_rename(const char *oldpath, const char *newpath)
     return vfs_rename(oldpath, newpath);
 }
 
+static long sys_gettime(timeval_t *tv)
+{
+    assert_nonzero(tv);
+    assert_userspace(tv);
+    return gettime(tv);
+}
+
+static void sys_sleep(size_t ns)
+{
+    // TODO: extremely bad implementation
+    timer_sleep(ns / 1000000);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -305,6 +319,9 @@ const void *syscall_table[] = {
     sys_create,  // 21 = create
     sys_remove,  // 22 = remove
     sys_rename,  // 23 = rename
+    sys_gettime, // 24 = gettime
+    sys_default, // 25 = settime
+    sys_sleep,   // 26 = sleep
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

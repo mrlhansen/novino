@@ -102,4 +102,10 @@ static inline long syscall(size_t id, size_t arg0, size_t arg1, size_t arg2, siz
     syscall(22, (size_t)path, 0, 0, 0, 0)
 
 #define sys_rename(oldpath, newpath) \
-    syscall(22, (size_t)oldpath, (size_t)newpath, 0, 0, 0)
+    syscall(23, (size_t)oldpath, (size_t)newpath, 0, 0, 0)
+
+#define sys_gettime(tv) \
+    syscall(24, (size_t)tv, 0, 0, 0, 0)
+
+#define sys_sleep(ns) \
+    syscall(26, ns, 0, 0, 0, 0)

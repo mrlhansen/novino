@@ -64,10 +64,10 @@ int main(int argc, char *argv[])
     };
 
     printf("\e[2J");
+    stop = 0;
 
     while(!stop)
     {
-        stop = 0;
         tui_refresh(&tui);
 
         seq = tiogets(buf, sizeof(buf));

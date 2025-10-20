@@ -9,11 +9,15 @@
 
 static mm_region_t *find_free_region(list_t *map, size_t length)
 {
-    mm_region_t *curr = map->head;
+    mm_region_t *curr = 0;
+    mm_region_t *next = map->head;
     mm_region_t *best = 0;
 
-    while(curr)
+    while(next)
     {
+        curr = next;
+        next = curr->link.next;
+
         if((curr->flags & MAP_FREE) == 0)
         {
             continue;
@@ -35,8 +39,6 @@ static mm_region_t *find_free_region(list_t *map, size_t length)
         {
             best = curr;
         }
-
-        curr = curr->link.next;
     }
 
     return best;
@@ -223,16 +225,16 @@ int mm_map_direct(list_t *map, size_t phys, size_t length, int flags, size_t *vi
         return status;
     }
 
+    r->phys = phys;
+    r->flags = flags | MAP_DIRECT;
+
     status = map_region(r);
     if(status < 0)
     {
         return status; // region should be merged again
     }
 
-    r->phys = phys;
-    r->flags = flags | MAP_DIRECT;
     *virt = r->addr;
-
     return 0;
 }
 
