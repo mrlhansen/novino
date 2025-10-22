@@ -1,4 +1,4 @@
-SUBDIRS := init yash cat ls mount umount stat mkdir rmdir rm ted
+SUBDIRS := $(subst /,,$(wildcard */))
 SOURCES := $(shell find $(SUBDIRS) -name '*.c')
 OBJECTS := $(SOURCES:.c=.o)
 TARGETS := $(SUBDIRS:=.elf)

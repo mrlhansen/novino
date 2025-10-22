@@ -4,6 +4,7 @@
 #include <kernel/mem/vmm.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/vfs/fd.h>
+#include <kernel/sysinfo.h>
 #include <kernel/errno.h>
 #include <string.h>
 
@@ -212,31 +213,48 @@ process_t *process_create(const char *name, uint64_t pml4, process_t *parent)
     return process;
 }
 
-#include <kernel/debug.h>
-void process_print()
+void sysinfo_proclist(sysinfo_t *sys)
 {
-    process_t *cp;
-    thread_t *ct;
-
-    cp = global_process_list.head;
-    char *states[] = {
-        "READY",
-        "RUNNING",
-        "SLEEPING",
-        "BLOCKING",
-        "WAITING",
-        "TERMINATED",
-    };
-
-    while(cp)
+    process_t *item = 0;
+    while(item = list_iterate_reverse(&global_process_list, item), item)
     {
-        kp_info("process", "%d: %s",cp->pid,cp->name);
-        ct = cp->threads.head;
-        while(ct)
+        sysinfo_write(sys, "%d", item->pid);
+    }
+}
+
+void sysinfo_procinfo(sysinfo_t *sys, size_t pid)
+{
+    process_t *item = 0;
+    thread_t *th = 0;
+
+    while(item = list_iterate(&global_process_list, item), item)
+    {
+        if(item->pid == pid)
         {
-            kp_info("process", "%d.%d: %-12s %16lu %10s %lx",cp->pid,ct->tid,ct->name,ct->time_used,states[ct->state],ct);
-            ct = ct->plink.next;
+            break;
         }
-        cp = cp->plink.next;
+    }
+
+    if(!item)
+    {
+        return;
+    }
+
+    sysinfo_write(sys, "pid=%d", item->pid);
+    sysinfo_write(sys, "ppid=%d", item->parent->pid);
+    sysinfo_write(sys, "name=%s", item->name);
+    sysinfo_write(sys, "state=%u", item->state);
+    sysinfo_write(sys, "uid=%u", item->state);
+    sysinfo_write(sys, "gid=%u", item->state);
+    sysinfo_write(sys, "memsz=%u", item->brk.end - item->brk.start); // TODO: this is only brk memory, we also have mmap and the size of the program itself
+    sysinfo_write(sys, "threads=%u", item->threads.length);
+
+    while(th = list_iterate_reverse(&item->threads, th), th)
+    {
+        sysinfo_write(sys, "tid=%d", th->tid);
+        sysinfo_write(sys, "name=%s", th->name);
+        sysinfo_write(sys, "priority=%d", th->priority);
+        sysinfo_write(sys, "state=%d", th->state);
+        sysinfo_write(sys, "cputime=%lu", th->time_used);
     }
 }

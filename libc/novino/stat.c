@@ -1,6 +1,6 @@
 #include <kernel/vfs/types.h>
 #include <novino/syscalls.h>
-#include <nonstd.h>
+#include <novino/stat.h>
 #include <errno.h>
 
 int stat(const char *path, struct stat *buf)

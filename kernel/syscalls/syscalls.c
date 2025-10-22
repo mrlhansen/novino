@@ -6,6 +6,7 @@
 #include <kernel/x86/ioports.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/vfs/vfs.h>
+#include <kernel/sysinfo.h>
 #include <kernel/types.h>
 #include <kernel/errno.h>
 #include <kernel/debug.h>
@@ -292,6 +293,13 @@ static void sys_sleep(size_t ns)
     timer_sleep(ns / 1000000);
 }
 
+static long sys_sysinfo(size_t req, size_t id, void *buf, size_t len)
+{
+    assert_nonzero(buf);
+    assert_userspace(buf);
+    return sysinfo(req, id, buf, len);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -322,6 +330,7 @@ const void *syscall_table[] = {
     sys_gettime, // 24 = gettime
     sys_default, // 25 = settime
     sys_sleep,   // 26 = sleep
+    sys_sysinfo, // 27 = sysinfo
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

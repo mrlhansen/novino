@@ -35,10 +35,10 @@ static inline atomic_t atomic_dec(atomic_t *var)
 
 static inline int atomic_lock(lock_t *lock)
 {
-    return __atomic_test_and_set(lock, __ATOMIC_RELAXED);
+    return __atomic_test_and_set(lock, __ATOMIC_ACQUIRE);
 }
 
 static inline void atomic_unlock(lock_t *lock)
 {
-    *lock = 0;
+    __atomic_clear(lock, __ATOMIC_RELEASE);
 }

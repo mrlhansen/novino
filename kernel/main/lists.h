@@ -28,3 +28,5 @@ void list_append(list_t *list, void *item);
 int list_remove(list_t *list, void *item);
 void *list_pop(list_t *list);
 void *list_head(list_t *list);
+void *list_iterate(list_t *list, void *item);
+void *list_iterate_reverse(list_t *list, void *item);

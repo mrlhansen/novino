@@ -2,6 +2,7 @@
 
 #include <kernel/sched/threads.h>
 #include <kernel/vfs/types.h>
+#include <kernel/sysinfo.h>
 #include <kernel/lists.h>
 
 struct process {
@@ -45,4 +46,5 @@ void process_remove_thread(process_t*, thread_t*);
 process_t *process_create(const char*, uint64_t, process_t*);
 process_t *process_handle();
 
-void process_print(); //temp
+void sysinfo_proclist(sysinfo_t *sys);
+void sysinfo_procinfo(sysinfo_t *sys, size_t pid);

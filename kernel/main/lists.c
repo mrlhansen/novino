@@ -202,3 +202,29 @@ void *list_head(list_t *list)
 {
     return list->head;
 }
+
+void *list_iterate(list_t *list, void *item)
+{
+    link_t *link;
+
+    if(!item)
+    {
+        return list->head;
+    }
+
+    link = item + list->offset;
+    return link->next;
+}
+
+void *list_iterate_reverse(list_t *list, void *item)
+{
+    link_t *link;
+
+    if(!item)
+    {
+        return list->tail;
+    }
+
+    link = item + list->offset;
+    return link->prev;
+}
