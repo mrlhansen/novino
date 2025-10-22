@@ -22,4 +22,5 @@ void *kzalloc(size_t size);
 void *kcalloc(size_t count, size_t size);
 void kfree(void *ptr);
 
+size_t heap_get_size();
 void heap_init();

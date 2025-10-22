@@ -16,11 +16,6 @@ static uint64_t bitmap_size;
 static uint32_t max_index;
 static uint32_t cur_index;
 
-static uint32_t dma_addr;
-static uint32_t dma_size;
-static uint8_t dma_max;
-static uint8_t dma_num;
-
 static uint32_t free_pages;
 static uint32_t num_pages;
 
@@ -151,20 +146,6 @@ uint64_t pmm_alloc_frames(uint32_t num, uint32_t align)
     return 0;
 }
 
-uint64_t pmm_alloc_isa_dma()
-{
-    uint64_t addr = 0;
-
-    if(dma_num < dma_max)
-    {
-        dma_num++;
-        addr = dma_addr;
-        dma_addr += dma_size;
-    }
-
-    return addr;
-}
-
 void pmm_set_available(uint64_t start, uint64_t size)
 {
     uint64_t end = start + size;
@@ -217,6 +198,16 @@ void pmm_set_reserved(uint64_t start, uint64_t size)
     }
 }
 
+size_t pmm_free_pages()
+{
+    return free_pages;
+}
+
+size_t pmm_usable_pages()
+{
+    return num_pages;
+}
+
 void pmm_init()
 {
     // Size of bitmap
@@ -235,12 +226,6 @@ void pmm_init()
     e820_report_available();
     num_pages = free_pages;
     slmm_report_reserved(1);
-
-    // Set ISA DMA region
-    dma_addr = 0x60000;
-    dma_size = 0x10000;
-    dma_max = 4;
-    dma_num = 0;
 
     // Log info
     kp_info("pmm", "created %d kb bitmap, controlling %d pages", bitmap_size/1024, bitmap_size*8);

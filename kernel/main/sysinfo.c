@@ -1,4 +1,7 @@
 #include <kernel/sched/process.h>
+#include <kernel/mem/heap.h>
+#include <kernel/mem/pmm.h>
+#include <kernel/mem/vmm.h>
 #include <kernel/sysinfo.h>
 #include <kernel/errno.h>
 #include <string.h>
@@ -40,6 +43,18 @@ int sysinfo_write(sysinfo_t *sys, const char *fmt, ...)
     return 0;
 }
 
+static void sysinfo_meminfo(sysinfo_t *sys)
+{
+    size_t total, free;
+
+    total = PAGE_SIZE * pmm_usable_pages();
+    free  = PAGE_SIZE * pmm_free_pages();
+
+    sysinfo_write(sys, "total=%lu", total);
+    sysinfo_write(sys, "free=%lu", free);
+    sysinfo_write(sys, "heap=%lu", heap_get_size());
+}
+
 int sysinfo(size_t req, size_t id, void *buf, size_t len)
 {
     sysinfo_t sys = {
@@ -51,6 +66,7 @@ int sysinfo(size_t req, size_t id, void *buf, size_t len)
     switch(req)
     {
         case SI_MEMINFO:
+            sysinfo_meminfo(&sys);
             break;
         case SI_PROCLIST:
             sysinfo_proclist(&sys);

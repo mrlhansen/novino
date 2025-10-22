@@ -42,6 +42,7 @@ void e820_init(size_t addr, size_t size)
 
     e820.end_total = 0;
     e820.end_avail = 0;
+    e820.mem_avail = 0;
     e820.num_regions = size / sizeof(e820_region_t);
     e820.region = (e820_region_t*)addr;
 
@@ -60,9 +61,13 @@ void e820_init(size_t addr, size_t size)
             e820.end_total = end;
         }
 
-        if(end > e820.end_avail && region->type == E820_AVAILABLE)
+        if(region->type == E820_AVAILABLE)
         {
-            e820.end_avail = end;
+            e820.mem_avail += region->length;
+            if(end > e820.end_avail)
+            {
+                e820.end_avail = end;
+            }
         }
 
         kp_info("e820", "%#016lx - %#016lx (%d kb, %s)", region->start, end, (region->length / 1024), e820_types[region->type-1]);

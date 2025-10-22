@@ -23,6 +23,7 @@ typedef struct {
     uint32_t num_regions;
     uint64_t end_avail;
     uint64_t end_total;
+    uint64_t mem_avail;
 } e820_map_t;
 
 void e820_report_available();

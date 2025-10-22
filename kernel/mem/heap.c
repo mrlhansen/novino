@@ -281,6 +281,11 @@ void kfree(void *ptr)
     glue_chunk(chunk, 1, 1);
 }
 
+size_t heap_get_size()
+{
+    return heap.size;
+}
+
 void heap_init()
 {
     chunk_t *first, *last, *middle;
