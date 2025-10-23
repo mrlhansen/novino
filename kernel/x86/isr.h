@@ -59,6 +59,7 @@ extern void isr28();
 extern void isr29();
 extern void isr30();
 extern void isr31();
+extern void isr_tlbflush();
 extern void isr_spurious();
 extern void isr_schedule();
 

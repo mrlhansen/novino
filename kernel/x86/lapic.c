@@ -29,6 +29,31 @@ void lapic_ipi(uint32_t apic_id, uint32_t type, uint8_t vector)
     lapic_write(APIC_ICR0, (0x4000 | type | vector));
 }
 
+void lapic_bcast_ipi(uint8_t vector, bool self, bool all)
+{
+    uint32_t icr0;
+
+    icr0 = (0x4000 | vector);
+    if(all)
+    {
+        if(self)
+        {
+            icr0 |= (2 << 18);
+        }
+        else
+        {
+            icr0 |= (3 << 18);
+        }
+    }
+    else
+    {
+        icr0 |= (1 << 18);
+    }
+
+    lapic_write(APIC_ICR1, 0);
+    lapic_write(APIC_ICR0, icr0);
+}
+
 void lapic_timer_mask()
 {
     uint32_t value;
@@ -45,7 +70,7 @@ void lapic_timer_unmask()
     lapic_write(APIC_LVTT, value);
 }
 
-void lapic_timer_init(uint32_t count, int periodic)
+void lapic_timer_init(uint32_t count, bool periodic)
 {
     if(periodic)
     {

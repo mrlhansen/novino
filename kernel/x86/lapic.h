@@ -31,14 +31,15 @@ enum {
     APIC_TDCR  = 0x3E0, // Divide Configuration for Timer
 };
 
-uint32_t lapic_read(uint16_t);
-void lapic_write(uint16_t, uint32_t);
-void lapic_ipi(uint32_t, uint32_t, uint8_t);
+uint32_t lapic_read(uint16_t reg);
+void lapic_write(uint16_t reg, uint32_t value);
+void lapic_bcast_ipi(uint8_t vector, bool self, bool all);
+void lapic_ipi(uint32_t apic_id, uint32_t type, uint8_t vector);
 uint8_t lapic_get_id();
 
 void lapic_timer_mask();
 void lapic_timer_unmask();
-void lapic_timer_init(uint32_t, int);
+void lapic_timer_init(uint32_t count, bool periodic);
 uint64_t lapic_timer_calibrate();
 
 void lapic_enable();

@@ -42,6 +42,7 @@ static char *exception_messages[] =
 
 void isr_init()
 {
+    // exceptions (0-31)
     idt_set_gate(0, isr0);
     idt_set_gate(1, isr1);
     idt_set_gate(2, isr2);
@@ -74,8 +75,13 @@ void isr_init()
     idt_set_gate(29, isr29);
     idt_set_gate(30, isr30);
     idt_set_gate(31, isr31);
+
+    // system reserved (32-47)
     idt_set_gate(32, isr_schedule);
     idt_set_gate(39, isr_spurious);
+
+    // system reserved (240-255)
+    idt_set_gate(254, isr_tlbflush);
     idt_set_gate(255, isr_spurious);
 }
 

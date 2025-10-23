@@ -289,7 +289,7 @@ uint64_t schedule_handler(uint64_t rsp)
 
     if(ticks)
     {
-        lapic_timer_init(ticks, 0);
+        lapic_timer_init(ticks, false);
     }
 
     lapic_write(APIC_EOI, 0);
@@ -341,5 +341,5 @@ void scheduler_init()
     scheduler_set_thread(scheduler, thread);
     scheduler_elapsed_time(scheduler);
 
-    lapic_write(APIC_ICR0, 0x84020);
+    lapic_bcast_ipi(32, true, true);
 }

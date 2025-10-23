@@ -2,6 +2,7 @@
 extern isr_handler
 extern irq_handler
 extern schedule_handler
+extern lapic_write
 
 [SECTION .text]
 %macro ISR_NOERRCODE 1
@@ -48,9 +49,6 @@ irq%1:
     push r13
     push r14
     push r15
-    mov ax, 0x10
-    mov ds, ax
-    mov es, ax
 %endmacro
 
 %macro restore_registers 0
@@ -132,6 +130,19 @@ isr_common_stub:
 
 global isr_spurious:function (isr_spurious.end - isr_spurious)
 isr_spurious:
+    iretq
+.end:
+
+global isr_tlbflush:function (isr_tlbflush.end - isr_tlbflush)
+isr_tlbflush:
+    cli
+    save_registers
+    mov rax, cr3
+    mov cr3, rax
+    mov rdi, 0xB0
+    mov rsi, 0
+    call lapic_write
+    restore_registers
     iretq
 .end:
 

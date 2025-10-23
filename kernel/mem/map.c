@@ -238,26 +238,26 @@ int mm_map_direct(list_t *map, size_t phys, size_t length, int flags, size_t *vi
     return 0;
 }
 
-// int mm_remap_direct(list_t *map, size_t virt, size_t phys)
-// {
-//     mm_region_t *r;
+int mm_remap_direct(list_t *map, size_t virt, size_t phys)
+{
+    mm_region_t *r;
 
-//     r = find_region(map, virt);
-//     if(r == 0)
-//     {
-//         return -EINVAL;
-//     }
+    r = find_region(map, virt);
+    if(r == 0)
+    {
+        return -EINVAL;
+    }
 
-//     if((r->flags & MAP_DIRECT) == 0)
-//     {
-//         return -EINVAL;
-//     }
+    if((r->flags & MAP_DIRECT) == 0)
+    {
+        return -EINVAL;
+    }
 
-//     r->phys = phys;
-//     map_region(r);
+    r->phys = phys;
+    map_region(r);
 
-//     return 0;
-// }
+    return 0;
+}
 
 int mm_init(list_t *map, size_t addr, size_t length)
 {
