@@ -316,7 +316,7 @@ static int map_large_page(uint64_t virt, uint64_t phys)
     return 0;
 }
 
-int vmm_set_caching(uint64_t virt, uint8_t type)
+int vmm_set_caching(uint64_t virt, uint8_t mode)
 {
     pte_t *pte;
     pte = get_page(virt, 0);
@@ -331,9 +331,9 @@ int vmm_set_caching(uint64_t virt, uint8_t type)
         return -1;
     }
 
-    pte->pwt = ((type & 1) > 0);
-    pte->pcd = ((type & 2) > 0);
-    pte->pat = ((type & 4) > 0);
+    pte->pwt = ((mode & 1) > 0);
+    pte->pcd = ((mode & 2) > 0);
+    pte->pat = ((mode & 4) > 0);
 
     return 0;
 }
@@ -408,6 +408,30 @@ int vmm_map_page(uint64_t virt, uint64_t phys)
     pte->avl = AVL_MAPPED;
     pte->phys_addr = shift(phys);
 
+    return 0;
+}
+
+int vmm_remap_page(uint64_t virt, uint64_t phys)
+{
+    pte_t *pte;
+    pte = get_page(virt, 1);
+
+    if(pte == 0)
+    {
+        return -1;
+    }
+
+    if(pte->present == 0)
+    {
+        return -1;
+    }
+
+    if(pte->avl != AVL_MAPPED)
+    {
+        return -1;
+    }
+
+    pte->phys_addr = shift(phys);
     return 0;
 }
 

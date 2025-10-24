@@ -12,9 +12,7 @@
 // VT = 2 (F3) normal terminal
 // VT = 3 (F4) normal terminal
 // VT = 4 (F5) normal terminal
-// VT = 5 (F6) normal terminal
-// VT = 6 (F7) normal terminal
-// VT = 7 (F8) graphical interface
+// VT = 5 (F6) graphical interface (direct framebuffer access)
 
 // Active VT
 static int vtnum = 0;
@@ -471,15 +469,12 @@ static void term_kbd_input(input_event_t *ev)
             case KEY_F6:
                 term_switch(5);
                 break;
-            case KEY_F7:
-                term_switch(6);
-                break;
         }
         return;
     }
 
-    // Kernel console is read-only
-    if(vtnum == 0)
+    // Special consoles are read-only
+    if(vtnum == 0 || vtnum == 5)
     {
         return;
     }

@@ -1,4 +1,5 @@
 #include <kernel/vfs/devfs.h>
+#include <kernel/term/fbmem.h>
 #include <kernel/term/term.h>
 #include <kernel/term/vts.h>
 #include <kernel/errno.h>
@@ -9,16 +10,24 @@
 // We use /devices/vtsX for virtual terminals
 // We use /devices/ptsX for pseudo terminals
 
-#define MAXVTS 8
+#define MAXVTS 6
 static vts_t vts[MAXVTS];
+static int current = 0;
 
 static int vts_open(file_t *file)
 {
     vts_t *vts = file->data;
+
     if(vts->file)
     {
         return -EBUSY;
     }
+
+    if(vts->id == 5)
+    {
+        fbmem_open();
+    }
+
     vts->file = file;
     return 0;
 }
@@ -26,10 +35,17 @@ static int vts_open(file_t *file)
 static int vts_close(file_t *file)
 {
     vts_t *vts = file->data;
+
     if(vts->file == file)
     {
         vts->file = 0;
     }
+
+    if(vts->id == 5)
+    {
+        fbmem_close();
+    }
+
     return 0;
 }
 
@@ -72,6 +88,10 @@ static int vts_ioctl(file_t *file, size_t cmd, size_t val)
         winsz->xpixel = vts->console->width;
         winsz->ypixel = vts->console->height;
     }
+    else if(cmd == TIOMAPFBMEM && vts->id == 5)
+    {
+        return fbmem_ioctl((fbmem_t*)val);
+    }
     else
     {
         return -ENOIOCTL;
@@ -93,6 +113,17 @@ vts_t *vts_select(int num)
     {
         return 0;
     }
+
+    if(current == 5)
+    {
+        fbmem_toggle(false);
+    }
+    else if(num == 5)
+    {
+        fbmem_toggle(true);
+    }
+
+    current = num;
     return vts + num;
 }
 
@@ -122,6 +153,10 @@ void vts_init()
         {
             vts[i].console = console_default();
             vts[i].flags = 0;
+        }
+        else if(i == 5)
+        {
+            fbmem_init(vts + i);
         }
         else
         {

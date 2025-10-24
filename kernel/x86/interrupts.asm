@@ -137,9 +137,9 @@ global isr_tlbflush:function (isr_tlbflush.end - isr_tlbflush)
 isr_tlbflush:
     cli
     save_registers
-    mov rax, cr3
+    mov rax, cr3      ; reload cr3
     mov cr3, rax
-    mov rdi, 0xB0
+    mov rdi, 0xB0     ; send EOI to lapic
     mov rsi, 0
     call lapic_write
     restore_registers

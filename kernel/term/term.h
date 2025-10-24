@@ -15,6 +15,7 @@ enum {
     TIOGETFLAGS = 0x1432fa, // Get flags
     TIOSETFLAGS = 0x124039, // Set flags
     TIOGETWINSZ = 0x174564, // Get window size
+    TIOMAPFBMEM = 0x51646e, // Map framebuffer
 };
 
 typedef struct {

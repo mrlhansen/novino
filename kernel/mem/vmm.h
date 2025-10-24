@@ -92,14 +92,15 @@ typedef struct {
     uint32_t nx        : 1;
 } __attribute__((packed)) pte_t;
 
-int vmm_set_caching(uint64_t, uint8_t);
-int vmm_set_mode(uint64_t, int, int);
+int vmm_set_caching(uint64_t virt, uint8_t mode);
+int vmm_set_mode(uint64_t virt, int w, int x);
 
-int vmm_alloc_page(uint64_t);
-int vmm_map_page(uint64_t, uint64_t);
-int vmm_free_page(uint64_t);
+int vmm_alloc_page(uint64_t virt);
+int vmm_map_page(uint64_t virt, uint64_t phys);
+int vmm_remap_page(uint64_t virt, uint64_t phys);
+int vmm_free_page(uint64_t virt);
 
-void vmm_load_pml4(uint64_t);
+void vmm_load_pml4(uint64_t addr);
 void vmm_load_kernel_pml4();
 uint64_t vmm_get_kernel_pml4();
 uint64_t vmm_get_current_pml4();
@@ -107,8 +108,8 @@ uint64_t vmm_get_current_pml4();
 uint64_t vmm_create_user_space();
 void vmm_destroy_user_space();
 
-uint64_t vmm_phys_to_virt(uint64_t);
-uint64_t vmm_virt_to_phys(uint64_t);
+uint64_t vmm_phys_to_virt(uint64_t phys);
+uint64_t vmm_virt_to_phys(uint64_t virt);
 
 void vmm_init();
 void pat_init();

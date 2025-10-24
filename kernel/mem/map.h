@@ -21,6 +21,9 @@ typedef struct {
 } mm_region_t;
 
 int mm_map(list_t *map, size_t length, int flags, size_t *virt);
+int mm_unmap(list_t *map, size_t virt);
+
 int mm_remap_direct(list_t *map, size_t virt, size_t phys);
 int mm_map_direct(list_t *map, size_t phys, size_t length, int flags, size_t *virt);
+
 int mm_init(list_t *map, size_t addr, size_t length);
