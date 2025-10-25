@@ -111,7 +111,6 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
             break;
         }
     }
-
 }
 
 static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const char *lookup_name, inode_t *lookup_inode)

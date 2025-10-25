@@ -13,7 +13,7 @@ typedef struct {
     thread_t *thread;
 } pipe_io_t;
 
-typedef struct _pipe {
+typedef struct {
     link_t link;                    // Link for list of pipes
     pipe_io_t rd;                   // Reading
     pipe_io_t wr;                   // Writing

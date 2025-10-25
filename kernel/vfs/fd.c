@@ -26,7 +26,7 @@ fd_t *fd_create(file_t *file)
     process = process_handle();
     fd->id = process->fd.next++;
     fd->file = file;
-    atomic_inc(&file->refs);
+    atomic_inc_fetch(&file->refs);
     list_insert(&process->fd.list, fd);
 
     return fd;
@@ -68,7 +68,7 @@ file_t *fd_delete(fd_t *fd)
     list_remove(&process->fd.list, fd);
 
     file = fd->file;
-    refs = atomic_dec(&file->refs);
+    refs = atomic_dec_fetch(&file->refs);
     kfree(fd);
 
     if(refs == 0)

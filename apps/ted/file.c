@@ -59,12 +59,21 @@ file_t *file_read(const char *filename)
     FILE *fp = fopen(filename, "r");
     if(fp)
     {
-        fseek(fp, 0, SEEK_END);
+        len = fseek(fp, 0, SEEK_END);
+        if(len < 0)
+        {
+            return 0;
+        }
+
         len = ftell(fp);
         rewind(fp);
 
-        data = malloc(len);
-        fread(data, 1, len, fp);
+        if(len)
+        {
+            data = malloc(len);
+            fread(data, 1, len, fp);
+        }
+
         fclose(fp);
     }
     else

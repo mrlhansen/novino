@@ -356,14 +356,14 @@ void vfs_proc_init(process_t *pr, dentry_t *cwd)
     pr->cwd = cwd;
     mp = cwd->inode->mp;
 
-    atomic_inc(&mp->numfd);
+    atomic_inc_fetch(&mp->numfd);
 }
 
 void vfs_proc_fini(process_t *pr)
 {
     vfs_mp_t *mp;
     mp = pr->cwd->inode->mp;
-    atomic_dec(&mp->numfd);
+    atomic_dec_fetch(&mp->numfd);
 }
 
 int vfs_put_dirent(void *data, const char *name, inode_t *inode)
@@ -758,8 +758,8 @@ int vfs_chdir(const char *pathname)
 
     if(curr != next)
     {
-        atomic_dec(&curr->numfd);
-        atomic_inc(&next->numfd);
+        atomic_dec_fetch(&curr->numfd);
+        atomic_inc_fetch(&next->numfd);
     }
 
     return 0;
@@ -928,7 +928,7 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
-    atomic_inc(&ip->mp->numfd);
+    atomic_inc_fetch(&ip->mp->numfd);
     return fd->id;
 }
 
@@ -967,7 +967,7 @@ int vfs_close(int id)
         status = 0;
     }
 
-    atomic_dec(&ip->mp->numfd);
+    atomic_dec_fetch(&ip->mp->numfd);
     kfree(file);
     return status;
 }

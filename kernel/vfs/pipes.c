@@ -3,7 +3,23 @@
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 
-// RETHINK THE USE OF MUTEXES
+static inline void wake(pipe_io_t *io)
+{
+    acquire_lock(&io->lock);
+    if(io->thread)
+    {
+        thread_unblock(io->thread);
+        io->thread = 0;
+    }
+    release_lock(&io->lock);
+}
+
+static inline void sleep(pipe_io_t *io)
+{
+    acquire_lock(&io->lock);
+    io->thread = thread_handle();
+    thread_block(&io->lock);
+}
 
 pipe_t *pipe_create(int rflags, int wflags)
 {
@@ -50,41 +66,31 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
+    bool status;
     int length = 0;
     int next;
 
-    if((wr->flags & O_NONBLOCK) && (wr->mutex->free == 0)) // do we need a function for this that acquires a lock?
+    status = (wr->flags & O_NONBLOCK) ? true : false;
+    status = acquire_mutex(wr->mutex, status);
+    if(!status)
     {
         return 0;
     }
-
-    acquire_mutex(wr->mutex); // or we need a flag that tells wether to block or just return with an error
 
     // Write to buffer
     while(maxlen--)
     {
         next = (pipe->head + 1) % PIPE_BUFFER_SIZE;
-        if(next == pipe->tail) // Buffer is full
+
+        // Buffer is full
+        if(next == pipe->tail)
         {
-            // Blocking?
             if(wr->flags & O_NONBLOCK)
             {
                 break;
             }
-
-            // Wake reader?
-            acquire_lock(&rd->lock);
-            if(rd->thread)
-            {
-                thread_unblock(rd->thread);
-                rd->thread = 0;
-            }
-            release_lock(&rd->lock);
-
-            // Sleep
-            acquire_lock(&wr->lock);
-            wr->thread = thread_handle();
-            thread_block(&wr->lock);
+            wake(rd);
+            sleep(wr);
         }
 
         pipe->data[pipe->head] = *buf++;
@@ -92,16 +98,9 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
         length++;
     }
 
-    // Wake reader?
-    acquire_lock(&rd->lock);
-    if(rd->thread)
-    {
-        thread_unblock(rd->thread);
-        rd->thread = 0;
-    }
-    release_lock(&rd->lock);
-
+    wake(rd);
     release_mutex(wr->mutex);
+
     return length;
 }
 
@@ -110,12 +109,18 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
+    bool status;
     int length = 0;
     int next;
 
-    acquire_mutex(rd->mutex);
+    status = (rd->flags & O_NONBLOCK) ? true : false;
+    status = acquire_mutex(rd->mutex, status);
+    if(!status)
+    {
+        return 0;
+    }
 
-    // Empty buffer?
+    // Buffer is empty
     if(pipe->head == pipe->tail)
     {
         if(rd->flags & O_NONBLOCK)
@@ -123,17 +128,16 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
             release_mutex(rd->mutex);
             return 0;
         }
-
-        acquire_lock(&rd->lock);
-        rd->thread = thread_handle();
-        thread_block(&rd->lock);
+        sleep(rd);
     }
 
     // Read from buffer
     while(maxlen--)
     {
         next = (pipe->tail + 1) % PIPE_BUFFER_SIZE;
-        if(pipe->head == pipe->tail) // Buffer is empty
+
+        // Buffer is empty
+        if(pipe->head == pipe->tail)
         {
             break;
         }
@@ -143,15 +147,8 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
         length++;
     }
 
-    // Wake writer?
-    acquire_lock(&wr->lock);
-    if(wr->thread)
-    {
-        thread_unblock(wr->thread);
-        wr->thread = 0;
-    }
-    release_lock(&wr->lock);
-
+    wake(wr);
     release_mutex(rd->mutex);
+
     return length;
 }
