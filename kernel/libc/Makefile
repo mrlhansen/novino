@@ -12,6 +12,7 @@ SOURCES += strncmp.c
 SOURCES += strcat.c
 SOURCES += strtok.c
 SOURCES += strchr.c
+SOURCES += strstr.c
 SOURCES += strrchr.c
 SOURCES += strrev.c
 SOURCES += strtolower.c

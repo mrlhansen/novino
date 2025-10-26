@@ -9,6 +9,5 @@ all: $(OBJECTS)
 crtbegin.o crtend.o:
 	cp $(shell $(CC) $(CCFLAGS) -print-file-name=$@) $@
 
-.PHONY: clean
 clean:
 	rm -f $(OBJECTS)

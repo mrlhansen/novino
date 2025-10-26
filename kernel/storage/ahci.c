@@ -313,7 +313,7 @@ static int ahci_atapi_request_sense(ahci_dev_t *dev)
     data = (void*)dev->dma.virt;
     data[0] = 0;
 
-    packet[0] = ATAPI_REQUEST_SENSE;
+    packet[0] = ATAPI_CMD_REQUEST_SENSE;
     packet[4] = 18;
     ahci_atapi_packet(dev, packet, 18, 1);
 
@@ -338,7 +338,7 @@ static int ahci_atapi_test_unit_ready(ahci_dev_t *dev)
     uint8_t packet[16] = {0};
     int status;
 
-    packet[0] = ATAPI_TEST_UNIT_READY;
+    packet[0] = ATAPI_CMD_TEST_UNIT_READY;
     status = ahci_atapi_packet(dev, packet, 0, 1);
     if(status < 0)
     {

@@ -29,7 +29,7 @@ int vfs_fstat(int fd, stat_t *stat);
 int vfs_chdir(const char *pathname);
 int vfs_getcwd(char *pathname, int size);
 
-int vfs_put_dirent(void*, const char*, inode_t*);
+int vfs_put_dirent(void *data, const char *name, inode_t *inode);
 int vfs_readdir(int fd, size_t count, dirent_t *dirent);
 
 int vfs_create(const char *pathname, int mode);

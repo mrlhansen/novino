@@ -27,6 +27,55 @@
 #include <kernel/vfs/initrd.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/debug.h>
+#include <string.h>
+#include <stdio.h>
+
+static char *getstr(const char *data, const char *name, char *str)
+{
+    const char *d;
+    char *s;
+    char buf[32];
+    size_t len;
+
+    len = sprintf(buf, "%s=", name);
+    data = strstr(data, buf);
+    if(!data)
+    {
+        return 0;
+    }
+
+    d = data + len;
+    s = str;
+
+    while(*d && *d != ' ')
+    {
+        *s++ = *d++;
+    }
+
+    *s = '\0';
+    return str;
+}
+
+static void system_mount(const char *cmdline)
+{
+    char device[64];
+    char fstype[16];
+
+    if(getstr(cmdline, "device", device) == NULL)
+    {
+        return;
+    }
+
+    if(getstr(cmdline, "fstype", fstype) == NULL)
+    {
+        return;
+    }
+
+    if(vfs_mount(device, fstype, "system") < 0)
+    {
+        kp_error("main", "failed to mount %s", device);
+    }
+}
 
 static void spawn_init()
 {
@@ -126,6 +175,7 @@ void kmain(bootstruct_t *bs)
     pci_route_init();
 
     // start init process
+    system_mount(bs->cmdline);
     term_switch(1);
     spawn_init();
 

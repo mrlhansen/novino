@@ -93,7 +93,7 @@ void thread_exit()
 
     thread = thread_handle();
     thread->state = TERMINATED;
-    process_remove_thread(thread->parent, thread);
+    process_remove_thread(thread);
     // do we need the dead queue? Could we not just free the memory in the schedule handler and that's it?
     list_append(&dead, thread); // we need something to free items in the dead queue
 

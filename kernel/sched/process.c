@@ -21,16 +21,16 @@ process_t *process_handle()
     return scheduler_get_thread()->parent;
 }
 
-void process_append_thread(process_t *process, thread_t *thread)
+void process_append_thread(process_t *parent, thread_t *thread)
 {
-    thread->tid = process->next_tid++;
-    thread->parent = process;
-    list_insert(&process->threads, thread);
+    thread->tid = parent->next_tid++;
+    thread->parent = parent;
+    list_insert(&parent->threads, thread);
 }
 
-void process_remove_thread(process_t *process, thread_t *thread) // TODO: process is redundant here, it can only be thread->parent
+void process_remove_thread(thread_t *thread)
 {
-    list_remove(&process->threads, thread);
+    list_remove(&thread->parent->threads, thread);
 }
 
 pid_t process_wait(pid_t pid, int *status)

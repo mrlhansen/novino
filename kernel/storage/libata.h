@@ -37,10 +37,10 @@ typedef struct {
 } ata_worker_t;
 
 enum {
-    ATAPI_TEST_UNIT_READY   = 0x00,
-    ATAPI_REQUEST_SENSE     = 0x03,
-    ATAPI_CMD_READ          = 0xA8,
-    ATAPI_CMD_READ_CAPACITY = 0x25
+    ATAPI_CMD_TEST_UNIT_READY = 0x00,
+    ATAPI_CMD_REQUEST_SENSE   = 0x03,
+    ATAPI_CMD_READ            = 0xA8,
+    ATAPI_CMD_READ_CAPACITY   = 0x25
 };
 
 enum {

@@ -55,6 +55,7 @@ bool acquire_mutex(mutex_t *mutex, bool nonblock)
         if(nonblock)
         {
             status = false;
+            thread->yield = 0;
         }
         else
         {

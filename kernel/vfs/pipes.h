@@ -23,6 +23,6 @@ typedef struct {
 } pipe_t;
 
 pipe_t *pipe_create(int rflags, int wflags);
-int pipe_delete(pipe_t*);
-int pipe_read(pipe_t*, int, void*);
-int pipe_write(pipe_t*, int, void*);
+int pipe_delete(pipe_t *pipe);
+int pipe_read(pipe_t *pipe, int maxlen, void *data);
+int pipe_write(pipe_t *pipe, int maxlen, void *data);
