@@ -9,12 +9,13 @@
 #define XHCI_MAX_COMMANDS 128
 
 // xhci-command.c
-void xhci_command_evaluate_context(xhci_t*, int, uint64_t);
-void xhci_command_configure_endpoint(xhci_t*, int, uint64_t);
-void xhci_command_address_device(xhci_t*, int, uint64_t);
-int xhci_command_enable_slot(xhci_t*);
-void xhci_command_disable_slot(xhci_t*, int);
-void xhci_command_noop(xhci_t*);
+int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_enable_slot(xhci_t *xhci);
+int xhci_command_disable_slot(xhci_t *xhci, int slot);
+int xhci_command_noop(xhci_t *xhci);
 
 void xhci_transfer_control(usb_dev_t*, usb_request_t*, uint64_t, int, int);
 void xhci_transfer_normal(usb_dev_t*, int, uint64_t, int);

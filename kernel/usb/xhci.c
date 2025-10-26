@@ -176,6 +176,7 @@ static void xhci_create_device_context(usb_dev_t *dev)
     xhci_context_t *ctx;
     xhci_t *xhci;
     usb_hub_t *hub;
+    int status;
 
     // Shortcuts
     ctx = usb_dev_xhci_context(dev);
@@ -230,8 +231,28 @@ static void xhci_create_device_context(usb_dev_t *dev)
     ctx->ep0->avg_trb_length = 8;
     ctx->ep0->cerr = 3;
 
-    // Send command
-    xhci_command_address_device(xhci, dev->slot_id, ctx->input_phys);
+    // Address device
+    status = xhci_command_address_device(xhci, dev->slot_id, ctx->input_phys);
+    if(status == 1)
+    {
+        return;
+    }
+
+    // Reset device
+    status = xhci_command_reset_device(xhci, dev->slot_id, ctx->input_phys);
+    if(status != 1 && status != 19)
+    {
+        kp_error("xhci", "device reset failed (status %d)", status);
+        return;
+    }
+    timer_sleep(25);
+
+    // Address device again
+    status = xhci_command_address_device(xhci, dev->slot_id, ctx->input_phys);
+    if(status != 1)
+    {
+        kp_error("xhci", "address device failed (status %d)", status);
+    }
 }
 
 void xhci_init_device(usb_dev_t *dev)

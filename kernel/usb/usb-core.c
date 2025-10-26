@@ -326,12 +326,6 @@ void usb_core_hub_attach(usb_hub_t *ptr)
     hub->wrk.lock = 0;
 
     kthreads_run(hub->wrk.thread);
-
-    // Wait for status changes
-    if(hub->hub_wait)
-    {
-        hub->hub_wait(hub);
-    }
 }
 
 static void usb_hub_print_hub(usb_hub_t *hub)
