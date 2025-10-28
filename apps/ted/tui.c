@@ -48,6 +48,12 @@ void tui_refresh(tui_t *tui)
     int xoff, yoff;
     int s, e;
 
+    if(tui->p)
+    {
+        prompt_draw(tui, tui->p);
+        return;
+    }
+
     w = &tui->w;
     file = w->file;
     xoff = w->wx.offset;

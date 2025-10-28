@@ -1,5 +1,12 @@
 #pragma once
 
+typedef enum {
+    NONE = 0,
+    EXIT = 1,
+    SAVE = 2,
+    INFO = 3,
+} action_t;
+
 typedef struct {
     int size;
     int cap;
@@ -39,10 +46,24 @@ typedef struct {
 } textarea_t;
 
 typedef struct {
+    const char *text;
+    int active;
+    int value;
+} button_t;
+
+typedef struct {
+    const char *text;
+    action_t action;
+    button_t *btn;
+    int nbtn;
+} prompt_t;
+
+typedef struct {
+    const char *name;
     int rows;
     int cols;
-    const char *name;
     textarea_t w;
+    prompt_t *p;
 } tui_t;
 
 void tui_refresh(tui_t *tui);
@@ -51,6 +72,10 @@ line_t *line_grow(file_t *file, int num, int minsz);
 void file_grow(file_t *file);
 int file_write(const char *filename, file_t *file);
 file_t *file_read(const char *filename);
+
+void prompt_draw(tui_t *tui, prompt_t *p);
+void prompt_left(prompt_t *p);
+void prompt_right(prompt_t *p);
 
 void textarea_up(textarea_t *w, int num);
 void textarea_down(textarea_t *w, int num);
