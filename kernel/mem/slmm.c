@@ -5,6 +5,11 @@
 static size_t slmm_start;
 static size_t slmm_end;
 
+size_t slmm_get_phys_end()
+{
+    return (slmm_end & 0x0FFFFFFF);
+}
+
 size_t slmm_kmalloc(size_t size, int align)
 {
     size_t addr;

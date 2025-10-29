@@ -555,10 +555,11 @@ void vmm_init()
     rs = virt2phys(&rodata);
     ws = virt2phys(&data);
 
-    // TODO: Hardcoding the mapping of 16 PTs (32MB) is unreliable.
-    // The amount needed depends on how much the SLMM uses.
+    // Map kernel and SLMM memory using 4K pages
+    // The number of mapped pages depends on the size of the SLMM memory region
     addr = 0;
-    ptc = 16;
+    ptc = slmm_get_phys_end() / (1 << 20);
+    ptc = (ptc + 1) / 2;
 
     // Map kernel memory
     for(int n = 0; n < ptc; n++)
