@@ -559,7 +559,7 @@ void vmm_init()
     // The number of mapped pages depends on the size of the SLMM memory region
     addr = 0;
     ptc = slmm_get_phys_end() / (1 << 20);
-    ptc = (ptc + 1) / 2;
+    ptc = (ptc + 2) / 2;
 
     // Map kernel memory
     for(int n = 0; n < ptc; n++)
@@ -571,6 +571,7 @@ void vmm_init()
         for(int m = 0; m < 512; m++)
         {
             link_pte(pt, m, addr);
+            pt[m].global = 1;
 
             if(addr >= cs)
             {

@@ -45,3 +45,11 @@ void pat_init()
     pat_list(pat, str);
     kp_info("pat", "new configuration (0-7): %s", str);
 }
+
+void pat_load()
+{
+    if(cpuid_feature(CPU_FEATURE_PAT))
+    {
+        write_msr(PAT_MSR, PAT_CONFIG_VALUE);
+    }
+}

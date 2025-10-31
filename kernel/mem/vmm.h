@@ -113,3 +113,4 @@ uint64_t vmm_virt_to_phys(uint64_t virt);
 
 void vmm_init();
 void pat_init();
+void pat_load();

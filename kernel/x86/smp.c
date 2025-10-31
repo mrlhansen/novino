@@ -73,6 +73,7 @@ void smp_ap_entry()
 {
     gdt_load();
     idt_load();
+    pat_load();
     vmm_load_kernel_pml4();
     lapic_enable();
     fpu_init();
