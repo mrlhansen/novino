@@ -6,6 +6,7 @@
 int stat(const char *path, struct stat *buf)
 {
     stat_t stat;
+    size_t mode;
     int status;
 
     status = sys_stat(path, &stat);
@@ -17,9 +18,12 @@ int stat(const char *path, struct stat *buf)
 
     if(buf)
     {
+        mode = stat.flags;
+        mode = (mode << 12) | stat.mode;
+
         buf->st_dev = 0;
         buf->st_ino = stat.ino;
-        buf->st_mode = stat.mode;
+        buf->st_mode = mode;
         buf->st_nlink = 0;
         buf->st_uid = stat.uid;
         buf->st_gid = stat.gid;

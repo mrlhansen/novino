@@ -18,24 +18,6 @@ typedef struct {
     char model[41];    // Model string
 } ata_info_t;
 
-typedef struct ata_queue {
-    void *dev;
-    void *buf;
-    int write;
-    uint32_t count;
-    uint64_t lba;
-    thread_t *thread;
-    volatile int status;
-    link_t link;
-} ata_queue_t;
-
-typedef struct {
-    int (*read)(void*, size_t, size_t, void*);
-    int (*write)(void*, size_t, size_t, void*);
-    thread_t *thread;
-    list_t queue;
-} ata_worker_t;
-
 enum {
     ATAPI_CMD_TEST_UNIT_READY = 0x00,
     ATAPI_CMD_REQUEST_SENSE   = 0x03,
@@ -71,5 +53,3 @@ enum {
 
 void libata_identify(uint16_t*, ata_info_t*);
 void libata_print(ata_info_t*, const char*, int, int);
-int libata_queue(ata_worker_t*, void*, int, uint64_t, uint32_t, void*);
-int libata_start_worker(ata_worker_t*, const char*);

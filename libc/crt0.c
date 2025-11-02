@@ -26,6 +26,5 @@ void __start(char **argv, char **envp)
     stdout->flags = (F_WRITE | F_TEXT);
 
     exitcode = main(argc, argv);
-    __libc_fd_exit();
     exit(exitcode);
 }

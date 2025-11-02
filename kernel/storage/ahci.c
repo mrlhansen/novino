@@ -29,7 +29,7 @@ static void ahci_handler(int gsi, void *data)
         dev  = host->dev + i;
         port = dev->port;
 
-        if(port == 0)
+        if(!port)
         {
             continue;
         }
@@ -42,13 +42,19 @@ static void ahci_handler(int gsi, void *data)
             dev->irq.status = status;
             dev->irq.flag = 1;
 
-            if(dev->irq.signal)
+            if(!dev->irq.signal)
             {
-                 if(status & dev->irq.type)
-                 {
+                continue;
+            }
+
+            if(status & dev->irq.type)
+            {
+                if(dev->wk.thread)
+                {
                     thread_signal(dev->wk.thread);
-                    dev->irq.signal = 0;
-                 }
+                    dev->wk.thread = 0;
+                }
+                dev->irq.signal = 0;
             }
         }
     }
@@ -539,7 +545,14 @@ static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
 static int ahci_read(void *data, size_t lba, size_t count, void *buf)
 {
     ahci_dev_t *dev = data;
-    return libata_queue(&dev->wk, dev, 0, lba, count, buf);
+    int status;
+
+    acquire_mutex(dev->wk.mutex, false);
+    dev->wk.thread = thread_handle();
+    status = ahci_read_core(dev, lba, count, buf);
+    release_mutex(dev->wk.mutex);
+
+    return status;
 }
 
 static int ahci_write_core(void *dp, size_t lba, size_t count, void *buf)
@@ -560,7 +573,14 @@ static int ahci_write_core(void *dp, size_t lba, size_t count, void *buf)
 static int ahci_write(void *data, size_t lba, size_t count, void *buf)
 {
     ahci_dev_t *dev = data;
-    return libata_queue(&dev->wk, dev, 1, lba, count, buf);
+    int status;
+
+    acquire_mutex(dev->wk.mutex, false);
+    dev->wk.thread = thread_handle();
+    status = ahci_write_core(dev, lba, count, buf);
+    release_mutex(dev->wk.mutex);
+
+    return status;
 }
 
 static int ahci_status(void *data, blkdev_t *blk, int ack)
@@ -712,14 +732,11 @@ static int ahci_init_port(ahci_dev_t *dev, uint32_t sig, devfs_t *parent)
         }
     }
 
-    // Setup worker thread
-    dev->irq.signal = 0;
-    dev->wk.read = ahci_read_core;
-    dev->wk.write = ahci_write_core;
-    sprintf(name, "ahci%d.%d", dev->host->bus, dev->id);
-    libata_start_worker(&dev->wk, name);
-
     // Register disk
+    dev->irq.signal = 0;
+    dev->wk.mutex = create_mutex();
+    dev->wk.thread = 0;
+
     static devfs_blk_t ops = {
         .status = ahci_status,
         .read = ahci_read,

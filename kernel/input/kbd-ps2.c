@@ -386,13 +386,13 @@ void ps2_kbd_init(ps2_port_t *dev)
     }
 
     // Information
-    dev->u.kbd.special = 0;
-    dev->u.kbd.extended = 0;
-    dev->u.kbd.released = 0;
-    dev->u.kbd.history = 0;
-    dev->u.kbd.scan_code_set = set;
+    dev->kbd.special = 0;
+    dev->kbd.extended = 0;
+    dev->kbd.released = 0;
+    dev->kbd.history = 0;
+    dev->kbd.scan_code_set = set;
 
     // Register handler
     vector = irq_alloc_gsi_vector(dev->gsi);
-    irq_request(vector, kbd_handler, &dev->u.kbd);
+    irq_request(vector, kbd_handler, &dev->kbd);
 }

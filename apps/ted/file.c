@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include "ted.h"
 
 line_t *line_grow(file_t *file, int num, int minsz)
@@ -78,6 +79,11 @@ file_t *file_read(const char *filename)
     }
     else
     {
+        if(errno != ENOENT)
+        {
+            return 0;
+        }
+        errno = 0;
         len = 0;
     }
 

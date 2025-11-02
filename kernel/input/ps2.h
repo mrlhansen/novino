@@ -19,7 +19,7 @@ typedef struct {
     int gsi;     // Interrupt pin
     union {
         ps2_kbd_t kbd;
-    } u;
+    };
 } ps2_port_t;
 
 #define PS2_UNKNOWN  0x00

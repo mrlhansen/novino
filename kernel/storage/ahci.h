@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel/storage/libata.h>
+#include <kernel/sched/mutex.h>
 #include <kernel/pci/pci.h>
 #include <kernel/types.h>
 
@@ -225,7 +226,6 @@ struct ahci_dev {
     uint8_t id;        // Port ID
     uint8_t atapi;     // ATAPI drive
     ata_info_t disk;   // ATA disk information
-    ata_worker_t wk;   // ATA worker
     uint8_t status;    // Status
 
     ahci_host_t *host; // AHCI host
@@ -233,6 +233,11 @@ struct ahci_dev {
     hba_chdr_t *clb;   // Command list base
     hba_ctbl_t *ctb;   // Command table base
     void *fb;          // FIS base
+
+    struct {
+        mutex_t *mutex;
+        thread_t *thread;
+    } wk;
 
     struct {
         uint64_t phys;

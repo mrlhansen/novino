@@ -3,6 +3,7 @@
 #include <kernel/acpi/acpi.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/x86/irq.h>
+#include <kernel/x86/strace.h>
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 
@@ -223,7 +224,10 @@ static int identify_device(int port, uint16_t *ident)
     }
 
     read_data(value);
-    read_data(value+1);
+    if(*value == 0xAB)
+    {
+        read_data(value+1);
+    }
 
     return 0;
 }
