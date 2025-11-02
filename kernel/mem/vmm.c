@@ -230,7 +230,7 @@ static pte_t *get_page(uint64_t addr, int make)
     return &pl1[ix1];
 }
 
-static pde2_t *get_large_page(uint64_t addr, int make)
+static pte_large_t *get_large_page(uint64_t addr, int make)
 {
     uint64_t ix4, ix3, ix2;
     pde_t *pl4, *pl3, *pl2;
@@ -291,12 +291,12 @@ static pde2_t *get_large_page(uint64_t addr, int make)
 
     // Return the page
     asm volatile("invlpg %0" :: "m"(addr));
-    return (pde2_t*)&pl2[ix2];
+    return (pte_large_t*)&pl2[ix2];
 }
 
 static int map_large_page(uint64_t virt, uint64_t phys)
 {
-    pde2_t *pde;
+    pte_large_t *pde;
     pde = get_large_page(virt, 1);
 
     if(pde == 0)
@@ -312,6 +312,7 @@ static int map_large_page(uint64_t virt, uint64_t phys)
     pde->present = 1;
     pde->avl = AVL_MAPPED;
     pde->phys_addr = (phys >> 21);
+    pde->nx = 1;
 
     return 0;
 }

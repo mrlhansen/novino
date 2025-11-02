@@ -75,7 +75,7 @@ typedef struct {
     uint32_t zero      : 8;
     uint64_t phys_addr : 42;
     uint32_t nx        : 1;
-} __attribute__((packed)) pde2_t;
+} __attribute__((packed)) pte_large_t;
 
 typedef struct {
     uint32_t present   : 1;

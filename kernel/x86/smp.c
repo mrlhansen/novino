@@ -1,6 +1,6 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/acpi/acpi.h>
-#include <kernel/mem/vmm.h>
+#include <kernel/time/time.h>
 #include <kernel/x86/lapic.h>
 #include <kernel/x86/smp.h>
 #include <kernel/x86/gdt.h>
@@ -8,6 +8,7 @@
 #include <kernel/x86/irq.h>
 #include <kernel/x86/tss.h>
 #include <kernel/x86/fpu.h>
+#include <kernel/mem/vmm.h>
 #include <kernel/debug.h>
 #include <string.h>
 
@@ -88,12 +89,6 @@ void smp_ap_entry()
     }
 }
 
-static void smp_wait()
-{
-    int i = 10000;
-    while(i--) asm volatile("nop");
-}
-
 static void smp_copy_boot_code()
 {
     void *dptr, *sptr;
@@ -107,10 +102,9 @@ static int smp_boot_ap(uint8_t id)
     ap_booted = 0;
     core_id = id;
 
-    lapic_ipi(core[id].apic_id, 0x500, 0x01); // Send INIT IPI
-    smp_wait();
-    lapic_ipi(core[id].apic_id, 0x600, 0x01); // Send SIPI IPI
-    smp_wait();
+    lapic_ipi(core[id].apic_id, 0x4500, 0x00); // Send INIT IPI
+    timer_sleep(10);
+    lapic_ipi(core[id].apic_id, 0x4600, 0x01); // Send SIPI IPI
 
     while(ap_booted == 0);
     return 0;

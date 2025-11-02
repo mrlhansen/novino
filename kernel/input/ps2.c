@@ -3,7 +3,6 @@
 #include <kernel/acpi/acpi.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/x86/irq.h>
-#include <kernel/x86/strace.h>
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 

@@ -517,9 +517,8 @@ static int ahci_rw_dma(ahci_dev_t *dev, int write, uint64_t lba, uint32_t count)
     return 0;
 }
 
-static int ahci_read_core(void *dp, size_t lba, size_t count, void *buf)
+static int ahci_read_core(ahci_dev_t *dev, size_t lba, size_t count, void *buf)
 {
-    ahci_dev_t *dev = dp;
     int status;
 
     // TODO: take dma buffer size into account
@@ -555,10 +554,8 @@ static int ahci_read(void *data, size_t lba, size_t count, void *buf)
     return status;
 }
 
-static int ahci_write_core(void *dp, size_t lba, size_t count, void *buf)
+static int ahci_write_core(ahci_dev_t *dev, size_t lba, size_t count, void *buf)
 {
-    ahci_dev_t *dev = dp;
-
     // TODO: take dma buffer size into account
 
     if(dev->atapi)

@@ -10,7 +10,7 @@ static char* e820_types[] = {
     "Available",
     "Reserved",
     "ACPI Reclaim",
-    "ACPI NVS Memory",
+    "ACPI NVS",
     "Unuseable",
     "Disabled"
 };
