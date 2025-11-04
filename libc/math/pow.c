@@ -9,25 +9,27 @@
 // f2xm1 calculates 2^x-1 for x=[-1,1]
 // fscale calculates y*2^x where y=st(0) and x=RoundTowardZero[st(1)]
 
-double pow(double base, double exp)
+double pow(double x, double y)
 {
     int neg = 0;
 
-    if(exp == 0.0)
+    if(y == 0.0)
     {
         return 1.0;
     }
 
-    if(exp == 1.0)
+    if(y == 1.0)
     {
-        return base;
+        return x;
     }
 
-    if(exp < 0)
+    if(y < 0.0)
     {
         neg = 1;
-        exp = -exp;
+        y = -y;
     }
+
+    // TODO: if x is negative we should return NAN, unless y is an integer
 
     asm volatile(
         "fyl2x\n"
@@ -46,9 +48,9 @@ double pow(double base, double exp)
         "fld1\n"
         "fdiv %%st(1)\n"
         ".end:\n"
-        : "=t"(base)
-        : "0"(base), "u"(exp), "a"(neg)
+        : "=t"(x)
+        : "0"(x), "u"(y), "a"(neg)
     );
 
-    return base;
+    return x;
 }

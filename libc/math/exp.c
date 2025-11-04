@@ -4,7 +4,6 @@
 
 double exp(double x)
 {
-    double x;
     int neg = 0;
 
     if(x == 0.0)
@@ -17,7 +16,7 @@ double exp(double x)
         return M_E;
     }
 
-    if(x < 0)
+    if(x < 0.0)
     {
         neg = 1;
         x = -x;

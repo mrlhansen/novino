@@ -20,16 +20,15 @@ double sinh(double x);
 double tanh(double x);
 
 double sqrt(double x);
-double pow(double base, double exp);
-
+double pow(double x, double y);
 double exp(double x);
 double ldexp(double x, int exp);
 double frexp(double x, int *exp);
 double log10(double x);
 double log(double x);
 
-double modf(double x, double *intpart);
-double fmod(double num, double den);
+double modf(double x, double *iptr);
+double fmod(double x, double y);
 double ceil(double x);
 double floor(double x);
 double fabs(double x);
