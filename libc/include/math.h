@@ -22,8 +22,8 @@ double tanh(double x);
 double sqrt(double x);
 double pow(double x, double y);
 double exp(double x);
-double ldexp(double x, int exp);
-double frexp(double x, int *exp);
+double ldexp(double x, int y);
+double frexp(double x, int *y);
 double log10(double x);
 double log(double x);
 
