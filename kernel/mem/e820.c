@@ -6,7 +6,7 @@
 static e820_map_t e820;
 
 // ACPI specs, Table 14-1, page 475
-static char* e820_types[] = {
+static const char *e820_types[] = {
     "Available",
     "Reserved",
     "ACPI Reclaim",

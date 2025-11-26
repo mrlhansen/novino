@@ -10,7 +10,7 @@ double log(double x)
 {
     if(x <= 0.0)
     {
-        return -NAN;
+        return NAN;
     }
     asm volatile("fldln2; fxch; fyl2x" : "+t"(x));
     return x;

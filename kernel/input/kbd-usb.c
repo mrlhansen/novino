@@ -3,7 +3,7 @@
 #include <string.h>
 
 // USB Keyboard Boot Protocol
-static uint8_t kbd_bp_keys[] = {
+static const uint8_t kbd_bp_keys[] = {
     0,              // 0x00
     0,              // 0x01 - Overflow
     0,              // 0x02
@@ -108,7 +108,7 @@ static uint8_t kbd_bp_keys[] = {
     KEY_COMPOSE,    // 0x65
 };
 
-static uint8_t kbd_bp_meta[] = {
+static const uint8_t kbd_bp_meta[] = {
     KEY_LEFTCTRL,   // Bit 0
     KEY_LEFTSHIFT,  // Bit 1
     KEY_LEFTALT,    // Bit 2

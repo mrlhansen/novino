@@ -7,7 +7,7 @@
 
 static LIST_INIT(devices, pci_dev_list_t, link);
 
-static char *pci_class[] = {
+static const char *pci_class[] = {
     "Unknown",
     "Storage",
     "Network",
@@ -210,7 +210,7 @@ void pci_init()
     mcfg_entry_t *entry;
     uint64_t address;
     pci_dev_t *dev;
-    char *name;
+    const char *name;
     int ns;
 
     address = acpi_mcfg_entries(&ns);

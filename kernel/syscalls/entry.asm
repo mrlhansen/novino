@@ -12,6 +12,7 @@ syscall_entry:
     swapgs
     mov [gs:8], rsp       ; store user rsp
     mov rsp, [gs:0]       ; load kernel rsp
+    push qword [gs:8]
     swapgs
     sti
 
@@ -37,9 +38,7 @@ syscall_entry:
     pop rdi
 
     cli
-    swapgs
-    mov rsp, [gs:8]       ; load user rsp
-    swapgs
+    pop rsp               ; load user rsp
 .ret:
     o64 sysret
 

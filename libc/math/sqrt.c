@@ -4,7 +4,7 @@ double sqrt(double x)
 {
     if(x <= 0.0)
     {
-        return -NAN;
+        return NAN;
     }
     asm volatile("fsqrt" : "+t"(x));
     return x;

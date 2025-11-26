@@ -3,7 +3,7 @@
 #include <kernel/mem/heap.h>
 #include <kernel/x86/irq.h>
 
-static uint8_t kbd_def_keys[] = {
+static const uint8_t kbd_def_keys[] = {
     0,              // 0x00
     KEY_F9,         // 0x01
     0,              // 0x02
@@ -134,7 +134,7 @@ static uint8_t kbd_def_keys[] = {
     0,              // 0x7f
 };
 
-static uint8_t kbd_ext_keys[] = {
+static const uint8_t kbd_ext_keys[] = {
     0,              // 0x00
     0,              // 0x01
     0,              // 0x02
@@ -325,7 +325,7 @@ static void kbd_handle_set_two(ps2_kbd_t *kbd, uint8_t code)
         }
     }
 
-    if(kbd->special == 0)
+    if(!kbd->special)
     {
         if(key)
         {
@@ -363,7 +363,6 @@ static void kbd_handler(int gsi, void *data)
 
 void ps2_kbd_init(ps2_port_t *dev)
 {
-    // keyboard_t *kbd;
     int set, ident;
     int vector;
 
