@@ -5,6 +5,7 @@
 
 void dcache_purge(dentry_t *root);
 void dcache_delete(dentry_t *item);
+void dcache_move(dentry_t *parent, dentry_t *item, const char *name);
 
 void dcache_mark_positive(dentry_t *item);
 void dcache_mark_negative(dentry_t *item);

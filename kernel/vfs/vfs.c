@@ -1096,18 +1096,15 @@ int vfs_rename(const char *oldpath, const char *newpath)
         return -ENOTSUP;
     }
 
-    // TODO: we should move the src dentry to dst such that all references continue to be valid
-
-    dcache_mark_positive(dst);
-
     status = fs->ops->rename(src, dst);
     if(status < 0)
     {
-        dcache_mark_negative(dst);
         return status;
     }
 
-    dcache_mark_negative(src);
+    dcache_move(dst->parent, src, dst->name);
+    dcache_delete(dst);
+
     return 0;
 }
 

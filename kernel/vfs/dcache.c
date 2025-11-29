@@ -28,6 +28,57 @@ static size_t dentry_hash(const char *p) // case sensitive
     return h;
 }
 
+static void dentry_unlink(dentry_t *item)
+{
+    dentry_t *parent = item->parent;
+    dentry_t *curr = parent->child;
+    dentry_t *prev = 0;
+
+    if(item->inode)
+    {
+        parent->positive--;
+    }
+    else
+    {
+        parent->negative--;
+    }
+
+    while(curr)
+    {
+        if(curr == item)
+        {
+            if(prev)
+            {
+                prev->next = curr->next;
+            }
+            else
+            {
+                parent->child = curr->next;
+            }
+            return;
+        }
+
+        prev = curr;
+        curr = curr->next;
+    }
+}
+
+static void dentry_link(dentry_t *parent, dentry_t *item)
+{
+    if(item->inode)
+    {
+        parent->positive++;
+    }
+    else
+    {
+        parent->negative++;
+    }
+
+    item->parent = parent;
+    item->next = parent->child;
+    parent->child = item;
+}
+
 dentry_t *dcache_lookup(dentry_t *parent, const char *name)
 {
     dentry_t *item;
@@ -53,30 +104,19 @@ dentry_t *dcache_lookup(dentry_t *parent, const char *name)
 
 void dcache_delete(dentry_t *item)
 {
-    dentry_t *parent = item->parent;
-    dentry_t *curr = parent->child;
-    dentry_t *prev = 0;
+    dentry_unlink(item);
+    kfree(item);
+}
 
-    while(curr)
+void dcache_move(dentry_t *parent, dentry_t *item, const char *name)
+{
+    dentry_unlink(item);
+    if(name)
     {
-        if(curr == item)
-        {
-            if(prev)
-            {
-                prev->next = curr->next;
-            }
-            else
-            {
-                parent->child = curr->next;
-            }
-
-            kfree(item);
-            return;
-        }
-
-        prev = curr;
-        curr = curr->next;
+        strcpy(item->name, name);
+        item->hash = dentry_hash(name);
     }
+    dentry_link(parent, item);
 }
 
 dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode)
@@ -98,18 +138,13 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode)
         item->inode->fs = parent->inode->fs;
         item->inode->mp = parent->inode->mp;
         item->inode->data = parent->inode->data;
-        parent->positive++;
     }
     else
     {
         item->inode = 0;
-        parent->negative++;
     }
 
-    item->parent = parent;
-    item->next = parent->child;
-    parent->child = item;
-
+    dentry_link(parent, item);
     return item;
 }
 

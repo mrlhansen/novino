@@ -2098,7 +2098,7 @@ static int ext2_rename(ext2_ctx_t *ctx, dentry_t *src, dentry_t *dst)
     int status;
 
     // link or update destination
-    if(dst->inode->ino)
+    if(dst->inode)
     {
         // when the destination is a directory, it must be empty
         if(dst->inode->flags & I_DIR)
@@ -2156,7 +2156,7 @@ static int ext2_rename(ext2_ctx_t *ctx, dentry_t *src, dentry_t *dst)
     }
 
     ext2_inode_settime(inode, EXT2_CTIME);
-    ext2_inode_getattr(ctx->fs, dst->inode, inode, src->inode->ino);
+    ext2_inode_getattr(ctx->fs, src->inode, inode, 0);
 
     // update .. for directories
     if(src->inode->flags & I_DIR)
@@ -2396,7 +2396,7 @@ static int ext2fs_rename(dentry_t *src, dentry_t *dst)
     ext2_ctx_t *ctx;
     int status;
 
-    ctx = ext2_ctx_alloc(dst->inode->data);
+    ctx = ext2_ctx_alloc(src->inode->data);
     if(!ctx)
     {
         return -ENOMEM;
