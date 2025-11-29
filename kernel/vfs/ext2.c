@@ -1403,13 +1403,12 @@ static int ext2_dirent_walk(ext2_ctx_t *ctx, uint32_t ino, size_t seek, void *da
     return ctx->errno;
 }
 
-static int ext2_dirent_unlink(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
+static int ext2_dirent_unlink(ext2_ctx_t *ctx, inode_t *dir, const char *name, inode_t *obj)
 {
     ext2_dentry_t *dp, *prev;
     ext2_inode_t *inode;
     uint32_t cblk, pblk;
     char filename[256];
-    bool found;
     int status;
 
     // initialize iterator
@@ -1420,22 +1419,20 @@ static int ext2_dirent_unlink(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     }
 
     // search for entry
-    found = false;
     pblk = 0;
     prev = 0;
 
     while(dp = ext2_dirent_next(ctx, &cblk, filename), dp)
     {
-        if(strcmp(dent->name, filename) == 0)
+        if(strcmp(name, filename) == 0)
         {
-            found = true;
             break;
         }
         pblk = cblk;
         prev = dp;
     }
 
-    if(!found)
+    if(!dp)
     {
         return -ENOENT;
     }
@@ -1469,7 +1466,7 @@ static int ext2_dirent_unlink(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     inode = ext2_inode_read(ctx, dir->ino, true);
     ext2_inode_settime(inode, EXT2_MTIME);
 
-    if(dent->inode->flags & I_DIR)
+    if(obj->flags & I_DIR)
     {
         inode->links--;
     }
@@ -1479,21 +1476,19 @@ static int ext2_dirent_unlink(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     return 0;
 }
 
-static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
+static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, const char *name, inode_t *obj)
 {
     ext2_inode_t *inode;
     ext2_dentry_t *dp;
     ext2_sb_t *sb;
     ext2_t *fs;
-    inode_t *obj;
     uint32_t block;
     int status, count;
     int req, used, avail;
 
     fs  = ctx->fs;
     sb = fs->sb;
-    obj = dent->inode;
-    req = sizeof(ext2_dentry_t) + strlen(dent->name);
+    req = sizeof(ext2_dentry_t) + strlen(name);
     req = align_size(req, 4);
 
     // read parent inode
@@ -1562,8 +1557,8 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
 
     // write entry
     dp->inode = obj->ino;
-    dp->length = strlen(dent->name);
-    strncpy(dp->name, dent->name, dp->length);
+    dp->length = strlen(name);
+    strncpy(dp->name, name, dp->length);
 
     if(sb->features_required & EXT2_REQ_DIRENT_TYPE)
     {
@@ -1588,6 +1583,48 @@ static int ext2_dirent_link(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
         inode->links++;
     }
     ext2_inode_getattr(fs, dir, inode, 0);
+
+    return 0;
+}
+
+static int ext2_dirent_relink(ext2_ctx_t *ctx, inode_t *dir, const char *name, inode_t *obj)
+{
+    ext2_dentry_t *dp;
+    ext2_inode_t *inode;
+    uint32_t blk;
+    char filename[256];
+    int status;
+
+    // initialize iterator
+    status = ext2_dirent_iter(ctx, dir->ino, true);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    // search for entry
+    while(dp = ext2_dirent_next(ctx, &blk, filename), dp)
+    {
+        if(strcmp(name, filename) == 0)
+        {
+            break;
+        }
+    }
+
+    if(!dp)
+    {
+        return -ENOENT;
+    }
+
+    // update dentry
+    dp->inode = obj->ino;
+
+    // mark as dirty
+    ext2_write_cached(ctx, blk);
+
+    // adjust parent inode
+    inode = ext2_inode_read(ctx, dir->ino, true);
+    ext2_inode_settime(inode, EXT2_MTIME);
 
     return 0;
 }
@@ -1904,7 +1941,7 @@ static int ext2_remove(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     }
 
     // all: remove directory entry
-    status = ext2_dirent_unlink(ctx, dir, dent);
+    status = ext2_dirent_unlink(ctx, dir, dent->name, dent->inode);
     if(status < 0)
     {
         return status;
@@ -1973,7 +2010,7 @@ static int ext2_mkdir(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     }
 
     // link entry in directory
-    status = ext2_dirent_link(ctx, dir, dent);
+    status = ext2_dirent_link(ctx, dir, dent->name, dent->inode);
     if(status < 0)
     {
         return status;
@@ -2042,7 +2079,7 @@ static int ext2_create(ext2_ctx_t *ctx, inode_t *dir, dentry_t *dent)
     }
 
     // link entry in directory
-    status = ext2_dirent_link(ctx, dir, dent);
+    status = ext2_dirent_link(ctx, dir, dent->name, dent->inode);
     if(status < 0)
     {
         return status;
@@ -2060,29 +2097,66 @@ static int ext2_rename(ext2_ctx_t *ctx, dentry_t *src, dentry_t *dst)
     ext2_inode_t *inode;
     int status;
 
-    // unlink from source
-    status = ext2_dirent_unlink(ctx, src->parent->inode, src);
+    // link or update destination
+    if(dst->inode->ino)
+    {
+        // when the destination is a directory, it must be empty
+        if(dst->inode->flags & I_DIR)
+        {
+            status = ext2_dirent_check_empty(ctx, dst->inode->ino);
+            if(status < 0)
+            {
+                return status;
+            }
+        }
+
+        // truncate and free
+        status = ext2_inode_truncate(ctx, dst->inode->ino);
+        if(status < 0)
+        {
+            return status;
+        }
+
+        status = ext2_inode_free(ctx, dst->inode->ino);
+        if(status < 0)
+        {
+            return status;
+        }
+
+        // update destination
+        status = ext2_dirent_relink(ctx, dst->parent->inode, dst->name, src->inode);
+        if(status < 0)
+        {
+            return status;
+        }
+    }
+    else
+    {
+        status = ext2_dirent_link(ctx, dst->parent->inode, dst->name, src->inode);
+        if(status < 0)
+        {
+            kp_info("ext2", "link failed for: %s", dst->name);
+            return status;
+        }
+    }
+
+    // unlink source
+    status = ext2_dirent_unlink(ctx, src->parent->inode, src->name, src->inode);
     if(status < 0)
     {
         kp_info("ext2", "unlink failed for: %s", src->name);
         return status;
     }
 
-    // link at destination
-    status = ext2_dirent_link(ctx, dst->parent->inode, dst);
-    if(status < 0)
-    {
-        kp_info("ext2", "link failed for: %s", dst->name);
-        return status;
-    }
-
-    // read inode
+    // update inode
     inode = ext2_inode_read(ctx, src->inode->ino, true);
     if(!inode)
     {
         return ctx->errno;
     }
+
     ext2_inode_settime(inode, EXT2_CTIME);
+    ext2_inode_getattr(ctx->fs, dst->inode, inode, src->inode->ino);
 
     // update .. for directories
     if(src->inode->flags & I_DIR)

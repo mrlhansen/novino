@@ -129,6 +129,7 @@ void dcache_mark_positive(dentry_t *item)
 
     inode = (void*)(item + 1);
     item->inode = inode;
+    memset(inode, 0, sizeof(inode_t));
 
     inode->fs = parent->inode->fs;
     inode->mp = parent->inode->mp;

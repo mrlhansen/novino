@@ -41,6 +41,9 @@ int fputs(const char *str, FILE *fp);
 char *gets(char *str);
 int puts(const char *str);
 
+int remove(const char *path);
+int rename(const char *oldpath, const char *newpath);
+
 /* formatted print */
 
 int printf(const char *fmt, ...);

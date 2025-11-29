@@ -52,7 +52,6 @@ static void ahci_handler(int gsi, void *data)
                 if(dev->wk.thread)
                 {
                     thread_signal(dev->wk.thread);
-                    dev->wk.thread = 0;
                 }
                 dev->irq.signal = 0;
             }
@@ -549,6 +548,7 @@ static int ahci_read(void *data, size_t lba, size_t count, void *buf)
     acquire_mutex(dev->wk.mutex, false);
     dev->wk.thread = thread_handle();
     status = ahci_read_core(dev, lba, count, buf);
+    dev->wk.thread = 0;
     release_mutex(dev->wk.mutex);
 
     return status;
@@ -575,6 +575,7 @@ static int ahci_write(void *data, size_t lba, size_t count, void *buf)
     acquire_mutex(dev->wk.mutex, false);
     dev->wk.thread = thread_handle();
     status = ahci_write_core(dev, lba, count, buf);
+    dev->wk.thread = 0;
     release_mutex(dev->wk.mutex);
 
     return status;

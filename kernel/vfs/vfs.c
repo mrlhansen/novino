@@ -240,10 +240,11 @@ static char *vfs_read_path(vfs_path_t *path)
 }
 
 // Walk the path and return the dentry of the last component.
-// When the last component does not exist, a negative dentry is
-// returned together with the status ENOENT. If any other error
-// occurs during the traversal, no dentry is returned.
-static int vfs_walk_path(const char *pathname, dentry_t **dp)
+// When the last component does not exist, a negative dentry is returned.
+// The variable >mustexist< dictates the requirement for the last dentry.
+// When mustexist is true, the status -ENOENT is returned for negative dentries.
+// If any other error occurs during the traversal, no dentry is returned.
+static int vfs_walk_path(const char *pathname, dentry_t **dp, bool mustexist)
 {
     autofree(vfs_path_t) *path = 0;
     dentry_t *parent, *child;
@@ -316,7 +317,7 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
             }
 
             child = dcache_append(parent, path->curr, ip);
-            if(child == 0)
+            if(!child)
             {
                 return -ENOMEM;
             }
@@ -336,9 +337,13 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp)
         return 0;
     }
 
-    if(path->depth == 0)
+    if(!path->depth)
     {
         *dp = parent;
+        if(!mustexist)
+        {
+            status = 0;
+        }
     }
 
     return status;
@@ -599,7 +604,7 @@ int vfs_stat(const char *pathname, stat_t *stat)
     inode_t *ip;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, true);
     if(status < 0)
     {
         return status;
@@ -740,7 +745,7 @@ int vfs_chdir(const char *pathname)
     dentry_t *dp;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, true);
     if(status < 0)
     {
         return status;
@@ -830,13 +835,10 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, false);
     if(status < 0)
     {
-        if(!dp)
-        {
-            return status;
-        }
+        return status;
     }
 
     if(!dp->inode)
@@ -901,7 +903,7 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
-    // append is not implemented
+    // TODO: append is not implemented
 
     fd = fd_create(0);
     fd->file->flags = flags;
@@ -980,13 +982,10 @@ int vfs_create(const char *pathname, int mode)
     inode_t *ip;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, false);
     if(status < 0)
     {
-        if(!dp)
-        {
-            return status;
-        }
+        return status;
     }
 
     if(dp->inode)
@@ -1027,7 +1026,7 @@ int vfs_remove(const char *pathname)
     dentry_t *dp;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, true);
     if(status < 0)
     {
         return status;
@@ -1063,27 +1062,27 @@ int vfs_rename(const char *oldpath, const char *newpath)
     dentry_t *dst;
     int status;
 
-    status = vfs_walk_path(oldpath, &src);
+    status = vfs_walk_path(oldpath, &src, true);
     if(status < 0)
     {
         return status;
     }
 
-    status = vfs_walk_path(newpath, &dst);
+    status = vfs_walk_path(newpath, &dst, false);
     if(status < 0)
     {
-        if(!dst)
-        {
-            return status;
-        }
+        return status;
     }
 
-    // linux overwrites target if it exists?
-    // in that case we need to check that types matches (file -> file and dir -> dir)
+    // TODO: check that we are not moving a directory to a subdirectory of itself
+    // TODO: check if destination is in use
 
     if(dst->inode)
     {
-        return -EEXIST;
+        if(dst->inode->flags != src->inode->flags)
+        {
+            return -EINVAL;
+        }
     }
 
     if(src->inode->mp != dst->parent->inode->mp)
@@ -1097,8 +1096,9 @@ int vfs_rename(const char *oldpath, const char *newpath)
         return -ENOTSUP;
     }
 
+    // TODO: we should move the src dentry to dst such that all references continue to be valid
+
     dcache_mark_positive(dst);
-    dst->inode[0] = src->inode[0]; // ability to move a dentry, such that pointers to the old entry are still valid?
 
     status = fs->ops->rename(src, dst);
     if(status < 0)
@@ -1119,13 +1119,10 @@ int vfs_mkdir(const char *pathname, int mode)
     inode_t *ip;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, false);
     if(status < 0)
     {
-        if(!dp)
-        {
-            return status;
-        }
+        return status;
     }
 
     if(dp->inode)
@@ -1166,7 +1163,7 @@ int vfs_rmdir(const char *pathname)
     dentry_t *dp;
     int status;
 
-    status = vfs_walk_path(pathname, &dp);
+    status = vfs_walk_path(pathname, &dp, true);
     if(status < 0)
     {
         return status;
@@ -1229,7 +1226,7 @@ int vfs_mount(const char *source, const char *fstype, const char *target)
 
     if(source)
     {
-        status = vfs_walk_path(source, &dp);
+        status = vfs_walk_path(source, &dp, true);
         if(status < 0)
         {
             return status;
