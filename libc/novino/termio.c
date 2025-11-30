@@ -92,15 +92,15 @@ int tiogetescape(const char *str, int *key, int *va, int *vb)
 
 int tiosetflags(int flags)
 {
-    return ioctl(0, TIOSETFLAGS, flags);
+    return ioctl(1, TIOSETFLAGS, flags);
 }
 
 int tiogetflags(int *flags)
 {
-    return ioctl(0, TIOGETFLAGS, flags);
+    return ioctl(1, TIOGETFLAGS, flags);
 }
 
 int tiogetwinsz(tiowinsz_t *w)
 {
-    return ioctl(0, TIOGETWINSZ, w);
+    return ioctl(1, TIOGETWINSZ, w);
 }

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -101,10 +102,103 @@ static int parse_cmdline(char *str)
     return count;
 }
 
+static char *autocomplete(char *str, int suggest)
+{
+    static char match[128];
+    static char path[128];
+    struct dirent *dent;
+    char *delim, *a, *b;
+    int len;
+    int mcnt;
+    int mlen;
+    DIR *dp;
+
+    memset(match, 0, sizeof(match));
+    memset(path, 0, sizeof(path));
+
+    if(*str == '/')
+    {
+        strcpy(path, "/");
+    }
+    else
+    {
+        strcpy(path, ".");
+    }
+
+    delim = strrchr(str, '/');
+    if(delim)
+    {
+        strncpy(path, str, (size_t)(delim - str));
+        str = delim + 1;
+    }
+
+    mcnt = 0;
+    mlen = 0;
+    len = strlen(str);
+
+    dp = opendir(path);
+    if(!dp)
+    {
+        return 0;
+    }
+
+    while(dent = readdir(dp), dent)
+    {
+        if(dent->d_name[0] == '.')
+        {
+            if(str[0] != '.')
+            {
+                continue;
+            }
+        }
+
+        if(strncmp(str, dent->d_name, len) == 0)
+        {
+            mcnt++;
+
+            if(mcnt > 1)
+            {
+                a = match;
+                b = dent->d_name;
+                mlen = 0;
+
+                while(*a == *b && *a)
+                {
+                    a++;
+                    b++;
+                    mlen++;
+                }
+
+                match[mlen] = '\0';
+                continue;
+            }
+
+            if(dent->d_type == DT_DIR)
+            {
+                mlen = sprintf(match, "%s/", dent->d_name);
+            }
+            else
+            {
+                mlen = sprintf(match, "%s ", dent->d_name);
+            }
+        }
+    }
+
+    closedir(dp);
+
+    if(mlen > len)
+    {
+        return match + len;
+    }
+
+    return NULL;
+}
+
 static char *yash_gets(char *str)
 {
     static int flags = 0;
     static char buf[64];
+    static char abuf[64];
 
     int hpos = hist_len; // local history position
     int hoff = 0;        // offset in history ring
@@ -258,7 +352,33 @@ static char *yash_gets(char *str)
             }
             else if(ch == '\t') // tab
             {
+                char *suggestion;
+                int start = 0;
 
+                for(int i = pos; i >= 0; i--)
+                {
+                    if(str[i] == ' ')
+                    {
+                        start = i + 1;
+                        break;
+                    }
+                }
+
+                if(!start)
+                {
+                    // no autocompletion for commands
+                    continue;
+                }
+
+                memset(abuf, 0, sizeof(abuf));
+                strncpy(abuf, str + start, pos - start);
+
+                suggestion = autocomplete(abuf, 0);
+                if(suggestion)
+                {
+                    seq = suggestion;
+                    continue;
+                }
             }
             else if(ch == '\b') // backspace
             {
@@ -403,7 +523,7 @@ static void yash_cd(int argc, char *argv[])
 
     if(chdir(path) < 0)
     {
-        printf("%s: %s: could not open\n", argv[0], path); // perror
+        printf("%s: %s: could not open\n", argv[0], path);
     }
     else
     {
