@@ -17,6 +17,20 @@ static LIST_INIT(fsl, vfs_fs_t, link);
 static LIST_INIT(mpl, vfs_mp_t, link);
 static dentry_t *root = 0;
 
+static inline void dentry_open(dentry_t *dp)
+{
+    vfs_mp_t *mp = dp->inode->mp;
+    atomic_inc_fetch(&mp->numfd);
+    atomic_inc_fetch(&dp->numfd);
+}
+
+static inline void dentry_close(dentry_t *dp)
+{
+    vfs_mp_t *mp = dp->inode->mp;
+    atomic_dec_fetch(&mp->numfd);
+    atomic_dec_fetch(&dp->numfd);
+}
+
 static int vfs_validate_name(const char *name, int maxlen)
 {
     if(strlen(name) >= maxlen)
@@ -351,24 +365,17 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp, bool mustexist)
 
 void vfs_proc_init(process_t *pr, dentry_t *cwd)
 {
-    vfs_mp_t *mp;
-
     if(!cwd)
     {
         cwd = root;
     }
-
     pr->cwd = cwd;
-    mp = cwd->inode->mp;
-
-    atomic_inc_fetch(&mp->numfd);
+    dentry_open(cwd);
 }
 
 void vfs_proc_fini(process_t *pr)
 {
-    vfs_mp_t *mp;
-    mp = pr->cwd->inode->mp;
-    atomic_dec_fetch(&mp->numfd);
+    dentry_close(pr->cwd);
 }
 
 int vfs_put_dirent(void *data, const char *name, inode_t *inode)
@@ -740,32 +747,32 @@ int vfs_ioctl(int id, size_t cmd, size_t val)
 
 int vfs_chdir(const char *pathname)
 {
-    vfs_mp_t *curr, *next;
     process_t *pr;
-    dentry_t *dp;
+    dentry_t *odp;
+    dentry_t *ndp;
     int status;
 
-    status = vfs_walk_path(pathname, &dp, true);
+    status = vfs_walk_path(pathname, &ndp, true);
     if(status < 0)
     {
         return status;
     }
 
-    if((dp->inode->flags & I_DIR) == 0)
+    if((ndp->inode->flags & I_DIR) == 0)
     {
         return -ENOTDIR;
     }
 
     pr = process_handle();
-    curr = pr->cwd->inode->mp;
-    next = dp->inode->mp;
-    pr->cwd = dp;
-
-    if(curr != next)
+    odp = pr->cwd;
+    if(odp == ndp)
     {
-        atomic_dec_fetch(&curr->numfd);
-        atomic_inc_fetch(&next->numfd);
+        return 0;
     }
+    pr->cwd = ndp;
+
+    dentry_open(ndp);
+    dentry_close(odp);
 
     return 0;
 }
@@ -930,7 +937,7 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
-    atomic_inc_fetch(&ip->mp->numfd);
+    dentry_open(dp);
     return fd->id;
 }
 
@@ -969,8 +976,9 @@ int vfs_close(int id)
         status = 0;
     }
 
-    atomic_dec_fetch(&ip->mp->numfd);
+    dentry_close(file->dentry);
     kfree(file);
+
     return status;
 }
 
@@ -1037,10 +1045,12 @@ int vfs_remove(const char *pathname)
         return -EISDIR;
     }
 
-    // check if file is currently open, if open, postpone delete until close, or just EBUSY?
+    if(dp->numfd)
+    {
+        return -EBUSY;
+    }
 
     fs = dp->inode->fs;
-
     if(fs->ops->remove == 0)
     {
         return -ENOTSUP;
@@ -1057,9 +1067,8 @@ int vfs_remove(const char *pathname)
 
 int vfs_rename(const char *oldpath, const char *newpath)
 {
+    dentry_t *src, *dst, *tmp;
     vfs_fs_t *fs;
-    dentry_t *src;
-    dentry_t *dst;
     int status;
 
     status = vfs_walk_path(oldpath, &src, true);
@@ -1074,9 +1083,18 @@ int vfs_rename(const char *oldpath, const char *newpath)
         return status;
     }
 
-    // TODO: check that we are not moving a directory to a subdirectory of itself
-    // TODO: check if destination is in use
+    if(dst->numfd)
+    {
+        return -EBUSY;
+    }
 
+    // null operation
+    if(src == dst)
+    {
+        return 0;
+    }
+
+    // match types if destination exists
     if(dst->inode)
     {
         if(dst->inode->flags != src->inode->flags)
@@ -1085,9 +1103,24 @@ int vfs_rename(const char *oldpath, const char *newpath)
         }
     }
 
+    // cross device check
     if(src->inode->mp != dst->parent->inode->mp)
     {
         return -EXDEV;
+    }
+
+    // check that we are not making a directory a subdirectory of itself
+    if(src->inode->flags & I_DIR)
+    {
+        tmp = dst->parent;
+        while(tmp != root)
+        {
+            if(tmp == src)
+            {
+                return -EINVAL;
+            }
+            tmp = tmp->parent;
+        }
     }
 
     fs = src->inode->fs;
@@ -1171,10 +1204,12 @@ int vfs_rmdir(const char *pathname)
         return -ENOTDIR;
     }
 
-    // check if dir is currently open, if open, postpone delete until close, or just EBUSY?
+    if(dp->numfd)
+    {
+        return -EBUSY;
+    }
 
     fs = dp->inode->fs;
-
     if(fs->ops->rmdir == 0)
     {
         return -ENOTSUP;
