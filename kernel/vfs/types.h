@@ -69,6 +69,7 @@ struct dentry {
     size_t positive;     // Number of valid entries
     size_t negative;     // Number of negative entries
     inode_t *inode;      // Associated inode (zero for negative entries)
+    atomic_t numfd;      // Number of file context references
 
     dentry_t *parent;    // Parent entry
     dentry_t *child;     // Child entries
