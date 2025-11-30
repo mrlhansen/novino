@@ -160,9 +160,17 @@ static int initrd_readdir(file_t *file, size_t seek, void *data)
             continue;
         }
 
-        if(strncmp(tar->name, dirname, len))
+        if(depth)
         {
-            continue;
+            if(strncmp(tar->name, dirname, len))
+            {
+                continue;
+            }
+
+            if(tar->name[len] != '/')
+            {
+                continue;
+            }
         }
 
         tar2inode(tar, &inode);

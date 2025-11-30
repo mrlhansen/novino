@@ -355,7 +355,7 @@ static char *yash_gets(char *str)
                 char *suggestion;
                 int start = 0;
 
-                for(int i = pos; i >= 0; i--)
+                for(int i = pos - 1; i >= 0; i--)
                 {
                     if(str[i] == ' ')
                     {
