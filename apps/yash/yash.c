@@ -4,9 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <dirent.h>
 #include <stdio.h>
 #include <ctype.h>
+
+char *autocomplete(char *str, int suggest);
 
 extern char **environ;
 static char *cmdv[32];
@@ -17,6 +18,11 @@ static int hist_pos;
 static int hist_max;
 static int hist_len;
 static char **hist;
+
+static inline void print_shell()
+{
+    printf("\e[94myash\e[0m:\e[32m%s\e[0m$ ", cwd);
+}
 
 static int parse_cmdline(char *str)
 {
@@ -102,98 +108,6 @@ static int parse_cmdline(char *str)
     return count;
 }
 
-static char *autocomplete(char *str, int suggest)
-{
-    static char match[128];
-    static char path[128];
-    struct dirent *dent;
-    char *delim, *a, *b;
-    int len;
-    int mcnt;
-    int mlen;
-    DIR *dp;
-
-    memset(match, 0, sizeof(match));
-    memset(path, 0, sizeof(path));
-
-    if(*str == '/')
-    {
-        strcpy(path, "/");
-    }
-    else
-    {
-        strcpy(path, ".");
-    }
-
-    delim = strrchr(str, '/');
-    if(delim)
-    {
-        strncpy(path, str, (size_t)(delim - str));
-        str = delim + 1;
-    }
-
-    mcnt = 0;
-    mlen = 0;
-    len = strlen(str);
-
-    dp = opendir(path);
-    if(!dp)
-    {
-        return 0;
-    }
-
-    while(dent = readdir(dp), dent)
-    {
-        if(dent->d_name[0] == '.')
-        {
-            if(str[0] != '.')
-            {
-                continue;
-            }
-        }
-
-        if(strncmp(str, dent->d_name, len) == 0)
-        {
-            mcnt++;
-
-            if(mcnt > 1)
-            {
-                a = match;
-                b = dent->d_name;
-                mlen = 0;
-
-                while(*a == *b && *a)
-                {
-                    a++;
-                    b++;
-                    mlen++;
-                }
-
-                match[mlen] = '\0';
-                continue;
-            }
-
-            if(dent->d_type == DT_DIR)
-            {
-                mlen = sprintf(match, "%s/", dent->d_name);
-            }
-            else
-            {
-                mlen = sprintf(match, "%s ", dent->d_name);
-            }
-        }
-    }
-
-    closedir(dp);
-
-    if(mlen > len)
-    {
-        return match + len;
-    }
-
-    return NULL;
-}
-
 static char *yash_gets(char *str)
 {
     static int flags = 0;
@@ -205,6 +119,7 @@ static char *yash_gets(char *str)
     int cont = 1;        // continue
     int pos = 0;         // position in current command string
     int len = 0;         // length of current command string
+    int tabz = 0;        // next tab press should show suggetions
     int ch;
 
     // history offset
@@ -373,12 +288,22 @@ static char *yash_gets(char *str)
                 memset(abuf, 0, sizeof(abuf));
                 strncpy(abuf, str + start, pos - start);
 
+                if(tabz)
+                {
+                    autocomplete(abuf, 1);
+                    print_shell();
+                    printf("%s \e[%dD", str, len - pos + 1);
+                    continue;
+                }
+
                 suggestion = autocomplete(abuf, 0);
                 if(suggestion)
                 {
                     seq = suggestion;
                     continue;
                 }
+
+                tabz = 1;
             }
             else if(ch == '\b') // backspace
             {
@@ -420,6 +345,11 @@ static char *yash_gets(char *str)
                     len++;
                     str[len] = '\0';
                 }
+            }
+
+            if(ch != '\t')
+            {
+                tabz = 0;
             }
         }
 
@@ -642,7 +572,7 @@ int main(int argc, char *argv[])
 
     while(1)
     {
-        printf("\e[94myash\e[0m:\e[32m%s\e[0m$ ", cwd);
+        print_shell();
         fflush(stdout);
 
         if(yash_gets(cmdline) == NULL)
