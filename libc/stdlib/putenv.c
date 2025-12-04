@@ -1,6 +1,7 @@
 #include <_stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 int putenv(char *string)
 {
@@ -8,7 +9,7 @@ int putenv(char *string)
 
     if(strchr(string, '=') == NULL)
     {
-        // errno = -EINVAL;
+        errno = EINVAL;
         return -1;
     }
 

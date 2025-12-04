@@ -1,23 +1,24 @@
 #include <_stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 int unsetenv(const char *name)
 {
     if(name == NULL)
     {
-        // errno = -EINVAL;
+        errno = EINVAL;
         return -1;
     }
 
     if(*name == '\0')
     {
-        // errno = -EINVAL;
+        errno = EINVAL;
         return -1;
     }
 
     if(strchr(name, '=') != NULL)
     {
-        // errno = -EINVAL;
+        errno = EINVAL;
         return -1;
     }
 

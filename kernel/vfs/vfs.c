@@ -598,6 +598,7 @@ int vfs_fstat(int id, stat_t *stat)
     stat->size = ip->size;
     stat->blksz = ip->blksz;
     stat->blocks = ip->blocks;
+    stat->links = ip->links;
     stat->atime = ip->atime;
     stat->ctime = ip->ctime;
     stat->mtime = ip->mtime;
@@ -626,6 +627,7 @@ int vfs_stat(const char *pathname, stat_t *stat)
     stat->size = ip->size;
     stat->blksz = ip->blksz;
     stat->blocks = ip->blocks;
+    stat->links = ip->links;
     stat->atime = ip->atime;
     stat->ctime = ip->ctime;
     stat->mtime = ip->mtime;

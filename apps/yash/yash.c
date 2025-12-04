@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 
 char *autocomplete(char *str, int suggest);
 
@@ -267,7 +268,7 @@ static char *yash_gets(char *str)
             }
             else if(ch == '\t') // tab
             {
-                char *suggestion;
+                char *tmp;
                 int start = 0;
 
                 for(int i = pos - 1; i >= 0; i--)
@@ -290,16 +291,19 @@ static char *yash_gets(char *str)
 
                 if(tabz)
                 {
-                    autocomplete(abuf, 1);
-                    print_shell();
-                    printf("%s \e[%dD", str, len - pos + 1);
+                    tmp = autocomplete(abuf, 1);
+                    if(tmp)
+                    {
+                        print_shell();
+                        printf("%s \e[%dD", str, len - pos + 1);
+                    }
                     continue;
                 }
 
-                suggestion = autocomplete(abuf, 0);
-                if(suggestion)
+                tmp = autocomplete(abuf, 0);
+                if(tmp)
                 {
-                    seq = suggestion;
+                    seq = tmp;
                     continue;
                 }
 
@@ -453,7 +457,7 @@ static void yash_cd(int argc, char *argv[])
 
     if(chdir(path) < 0)
     {
-        printf("%s: %s: could not open\n", argv[0], path);
+        printf("%s: %s: %s\n", argv[0], path, strerror(errno));
     }
     else
     {

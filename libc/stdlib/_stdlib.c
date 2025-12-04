@@ -1,5 +1,6 @@
 #include <_stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 static int *state = 0;  // Allocation state (1 if variable is allocated by libc, 0 otherwise)
 static int cap = 0;     // Total capacity
@@ -18,16 +19,16 @@ static int __libc_init_environ()
     // allocate memory
     cap = 10 + 2 * cnt;
     new_environ = calloc(cap+1, sizeof(char*));
-    if(new_environ == 0)
+    if(!new_environ)
     {
-        // set errno = -ENOMEM;
+        errno = ENOMEM;
         return -1;
     }
 
     state = calloc(cap+1, sizeof(int));
-    if(state == 0)
+    if(!state)
     {
-        // set errno = -ENOMEM;
+        errno = ENOMEM;
         return -1;
     }
 
@@ -50,16 +51,16 @@ static int __libc_resize_environ()
     // allocate memory
     cap = 2 * cnt;
     new_environ = calloc(cap+1, sizeof(char*));
-    if(new_environ == 0)
+    if(!new_environ)
     {
-        // set errno = -ENOMEM;
+        errno = ENOMEM;
         return -1;
     }
 
     new_state = calloc(cap+1, sizeof(int));
-    if(new_state == 0)
+    if(!new_state)
     {
-        // set errno = -ENOMEM;
+        errno = ENOMEM;
         return -1;
     }
 
@@ -121,7 +122,7 @@ int __libc_getenv(const char *name)
 
 int __libc_putenv(const char *string, int allocated, int pos)
 {
-    if(cap == 0)
+    if(!cap)
     {
         if(__libc_init_environ() < 0)
         {
@@ -157,7 +158,7 @@ int __libc_unsetenv(const char *name)
 {
     int pos;
 
-    if(cap == 0)
+    if(!cap)
     {
         if(__libc_init_environ() < 0)
         {

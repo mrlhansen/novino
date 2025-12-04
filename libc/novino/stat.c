@@ -24,7 +24,7 @@ int stat(const char *path, struct stat *buf)
         buf->st_dev = 0;
         buf->st_ino = stat.ino;
         buf->st_mode = mode;
-        buf->st_nlink = 0;
+        buf->st_nlink = stat.links;
         buf->st_uid = stat.uid;
         buf->st_gid = stat.gid;
         buf->st_rdev = 0;

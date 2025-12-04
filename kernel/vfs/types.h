@@ -93,6 +93,7 @@ typedef struct {
     uint64_t size;    // File size
     uint32_t blksz;   // File system block size for this object
     uint32_t blocks;  // Number of blocks allocated for this object
+    uint32_t links;   // Number of hard links
     uint64_t atime;   // Time of last access
     uint64_t ctime;   // Time of last status change
     uint64_t mtime;   // Time of last modification

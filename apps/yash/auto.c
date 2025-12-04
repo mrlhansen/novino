@@ -212,7 +212,12 @@ char *autocomplete(char *str, int suggest)
 
             printf("%s%-*s", dent->d_name, len, (dent->d_type == DT_DIR) ? "/" : "");
         }
-        putchar('\n');
+
+        if(list_len)
+        {
+            putchar('\n');
+            mlen = len + 1;
+        }
     }
 
     if(mlen > len)

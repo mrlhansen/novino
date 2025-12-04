@@ -28,6 +28,7 @@ int main(int argc, char *argv[])
     printf("Mode   : %04o\n", st.st_mode & 0xFFF);
     printf("Blocks : %lu x %u\n", st.st_blocks, st.st_blksize);
     printf("Inode  : %u\n", st.st_ino);
+    printf("Links  : %u\n", st.st_nlink);
     printf("UID    : %u\n", st.st_uid);
     printf("GID    : %u\n", st.st_gid);
     tm = gmtime(&st.st_atime);
@@ -36,8 +37,6 @@ int main(int argc, char *argv[])
     printf("Modify : %s", asctime(tm));
     tm = gmtime(&st.st_ctime);
     printf("Change : %s", asctime(tm));
-
-    // Add links and file type
 
     return 0;
 }
