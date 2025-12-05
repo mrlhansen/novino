@@ -25,6 +25,8 @@ static void mouse_handler(int gsi, void *data)
             mouse->rely = value;
             mouse->cycle = 0;
             break;
+        default:
+            break;
     }
 
     if(mouse->cycle)

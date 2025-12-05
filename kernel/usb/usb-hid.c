@@ -63,6 +63,7 @@ static void hid_interrupt_handler(void *data)
     if(hid->type == USB_HID_MOUSE)
     {
         report &= 0xFFFFFF;
+        input_mouse_usb_boot_protocol(report, hid->report_last);
     }
     else if(hid->type == USB_HID_KEYBOARD)
     {

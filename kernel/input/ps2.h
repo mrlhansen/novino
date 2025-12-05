@@ -13,7 +13,7 @@ typedef struct {
 typedef struct {
     uint8_t cycle;  // Byte index
     uint8_t prev;   // Previous meta value
-    uint8_t meta;   // Current meta calue
+    uint8_t meta;   // Current meta value
     uint8_t relx;   // Relative X value
     uint8_t rely;   // Relative Y value
 } ps2_mouse_t;

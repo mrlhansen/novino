@@ -162,7 +162,7 @@ void vesa_scroll(console_t *con)
     for(int i = 0; i < size; i++)
     {
         con->glyphs[i].ch = con->glyphs[i + con->max_x].ch;
-        con->glyphs[i].bg = con->glyphs[i + con->max_x].fg;
+        con->glyphs[i].fg = con->glyphs[i + con->max_x].fg;
         con->glyphs[i].bg = con->glyphs[i + con->max_x].bg;
     }
     for(int i = 0; i < con->max_x; i++)
@@ -309,7 +309,7 @@ void vesa_init(console_t *con, bootstruct_t *bs)
     con->lfbaddr         = bs->lfb_address;
     con->bufaddr         = (uint64_t)kzalloc(con->memsz);
 
-    xspace = 1;
+    xspace = 0;
     yspace = 0;
     psf_parse(&font, zap_light_8x16);
     vesa_set_color(con, VGA_BRIGHT_WHITE, VGA_BLACK);
