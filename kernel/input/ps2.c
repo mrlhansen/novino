@@ -467,13 +467,27 @@ void ps2_init()
     }
 
     // Initialize device drivers
-    if(p0.type == PS2_KEYBOARD)
+    switch(p0.type)
     {
-        ps2_kbd_init(&p0);
+        case PS2_KEYBOARD:
+            ps2_kbd_init(&p0);
+            break;
+        case PS2_MOUSE:
+            ps2_mouse_init(&p0);
+            break;
+        default:
+            break;
     }
 
-    if(p1.type == PS2_KEYBOARD)
+    switch(p1.type)
     {
-        ps2_kbd_init(&p1);
+        case PS2_KEYBOARD:
+            ps2_kbd_init(&p1);
+            break;
+        case PS2_MOUSE:
+            ps2_mouse_init(&p1);
+            break;
+        default:
+            break;
     }
 }

@@ -11,6 +11,14 @@ typedef struct {
 } ps2_kbd_t;
 
 typedef struct {
+    uint8_t cycle;  // Byte index
+    uint8_t prev;   // Previous meta value
+    uint8_t meta;   // Current meta calue
+    uint8_t relx;   // Relative X value
+    uint8_t rely;   // Relative Y value
+} ps2_mouse_t;
+
+typedef struct {
     int port;    // Port number (0 or 1)
     int exists;  // Port exists (boolean)
     int device;  // Device is connected (boolean)
@@ -19,6 +27,7 @@ typedef struct {
     int gsi;     // Interrupt pin
     union {
         ps2_kbd_t kbd;
+        ps2_mouse_t mouse;
     };
 } ps2_port_t;
 
@@ -39,8 +48,9 @@ typedef struct {
 
 #define PS2_TIMEOUT 500000000UL
 
-void ps2_kbd_init(ps2_port_t*);
+void ps2_kbd_init(ps2_port_t *dev);
+void ps2_mouse_init(ps2_port_t *dev);
 
-int ps2_device_write(int, uint8_t);
+int ps2_device_write(int port, uint8_t value);
 int ps2_device_read();
 void ps2_init();

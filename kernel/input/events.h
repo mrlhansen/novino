@@ -1,5 +1,12 @@
 #pragma once
 
+// Event types
+enum {
+    EV_KEY = 1,
+    EV_BTN = 2,
+    EV_REL = 3,
+};
+
 // Keyboard
 enum {
     KEY_ESC        = 1,
@@ -107,4 +114,19 @@ enum {
     KEY_KP9        = 103,
     KEY_102ND      = 104,
     KEY_COMPOSE    = 105,
+};
+
+// Mouse buttons
+enum {
+    BTN_MOUSE  = 0x100,
+    BTN_LEFT   = 0x101,
+    BTN_RIGHT  = 0x102,
+    BTN_MIDDLE = 0x103,
+};
+
+// Relative movements
+enum {
+    REL_X = 1,
+    REL_Y = 2,
+    REL_Z = 3,
 };

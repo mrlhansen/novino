@@ -2,7 +2,6 @@
 #include <kernel/vfs/devfs.h>
 #include <kernel/vfs/pipes.h>
 #include <kernel/time/time.h>
-#include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <kernel/lists.h>
 
@@ -21,7 +20,7 @@ static int input_kbd_open(file_t *file)
     }
 
     pipe = pipe_create(rflags, O_NONBLOCK);
-    if(pipe == 0)
+    if(!pipe)
     {
         return -EIO;
     }
@@ -61,7 +60,7 @@ void input_kbd_write(int code, int value)
     pipe_t *pipe = pipes.head;
     input_event_t event = {
         .ts = system_timestamp(),
-        .type = 0, // EV_KEY
+        .type = EV_KEY,
         .code = code,
         .value = value,
     };
