@@ -16,6 +16,7 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode);
 void vfs_proc_init(process_t *pr, dentry_t *cwd);
 void vfs_proc_fini(process_t *pr);
 
+int vfs_mkpipe(int *fd);
 int vfs_open(const char *pathname, int flags);
 int vfs_close(int fd);
 

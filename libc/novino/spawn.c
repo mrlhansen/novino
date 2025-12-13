@@ -1,8 +1,9 @@
 #include <novino/syscalls.h>
+#include <novino/spawn.h>
 #include <_stdlib.h>
 #include <_stdio.h>
 
-long spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE *stdin, FILE *stdout)
+pid_t spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE *stdin, FILE *stdout)
 {
     long status;
 
@@ -15,17 +16,23 @@ long spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE
     return status;
 }
 
-long spawnve(const char *pathname, char *const argv[], char *const envp[])
+pid_t spawnve(const char *pathname, char *const argv[], char *const envp[])
 {
     return spawnvef(pathname, argv, envp, stdin, stdout);
 }
 
-long spawnv(const char *pathname, char *const argv[])
+pid_t spawnv(const char *pathname, char *const argv[])
 {
     return spawnvef(pathname, argv, environ, stdin, stdout);
 }
 
-long wait(long pid, int *status)
+pid_t wait(pid_t pid, int *status)
 {
-    return sys_wait(pid, status);
+    pid = sys_wait(pid, status);
+    if(pid < 0)
+    {
+        errno = -pid;
+        return -1;
+    }
+    return pid;
 }

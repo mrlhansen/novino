@@ -971,7 +971,10 @@ int vfs_close(int id)
         status = ops->close(file);
     }
 
-    dentry_close(file->dentry);
+    if(file->dentry)
+    {
+        dentry_close(file->dentry);
+    }
     kfree(file);
 
     return status;

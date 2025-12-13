@@ -25,6 +25,7 @@ enum {
     I_BLOCK    = 0x04, // Block device
     I_STREAM   = 0x08, // Stream device
     I_SYMLINK  = 0x10, // Symbolic link
+    I_PIPE     = 0x20, // Anonymous pipe
 };
 
 // Seeking

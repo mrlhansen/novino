@@ -300,6 +300,13 @@ static long sys_sysinfo(size_t req, size_t id, void *buf, size_t len)
     return sysinfo(req, id, buf, len);
 }
 
+static long sys_mkpipe(int *fd)
+{
+    assert_nonzero(fd);
+    assert_userspace(fd);
+    return vfs_mkpipe(fd);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -331,6 +338,7 @@ const void *syscall_table[] = {
     sys_default, // 25 = settime
     sys_sleep,   // 26 = sleep
     sys_sysinfo, // 27 = sysinfo
+    sys_mkpipe,  // 28 = mkpipe
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

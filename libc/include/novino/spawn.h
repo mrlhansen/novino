@@ -1,9 +1,10 @@
 #pragma once
 
+#include <unistd.h>
 #include <stdio.h>
 
-long spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE *stdin, FILE *stdout);
-long spawnve(const char *pathname, char *const argv[], char *const envp[]);
-long spawnv(const char *pathname, char *const argv[]);
+pid_t spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE *stdin, FILE *stdout);
+pid_t spawnve(const char *pathname, char *const argv[], char *const envp[]);
+pid_t spawnv(const char *pathname, char *const argv[]);
 
-long wait(long pid, int *status);
+pid_t wait(pid_t pid, int *status);
