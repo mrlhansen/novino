@@ -131,12 +131,12 @@ dentry_t *dcache_append(dentry_t *parent, const char *name, inode_t *inode)
 
     strcpy(item->name, name);
     item->hash = dentry_hash(name);
+    item->mp = parent->mp;
 
     if(inode)
     {
         item->inode[0] = inode[0];
-        item->inode->fs = parent->inode->fs;
-        item->inode->mp = parent->inode->mp;
+        item->inode->ops = parent->inode->ops;
         item->inode->data = parent->inode->data;
     }
     else
@@ -166,8 +166,7 @@ void dcache_mark_positive(dentry_t *item)
     item->inode = inode;
     memset(inode, 0, sizeof(inode_t));
 
-    inode->fs = parent->inode->fs;
-    inode->mp = parent->inode->mp;
+    inode->ops = parent->inode->ops;
     inode->data = parent->inode->data;
 }
 

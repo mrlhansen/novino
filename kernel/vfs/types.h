@@ -15,7 +15,7 @@ enum {
     O_APPEND   = 0x08, // Seek to end of file on open
     O_DIR      = 0x10, // Open a directory
     O_CREATE   = 0x20, // Create file on open
-    O_NONBLOCK = 0x40  // Non-blocking
+    O_NONBLOCK = 0x40, // Non-blocking
 };
 
 // Inode flags
@@ -37,26 +37,26 @@ typedef struct blkdev blkdev_t;
 typedef struct devfs devfs_t;
 typedef struct vfs_fs vfs_fs_t;
 typedef struct vfs_mp vfs_mp_t;
+typedef struct vfs_ops vfs_ops_t;
 typedef struct inode inode_t;
 typedef struct dentry dentry_t;
 
 // File inode
 struct inode {
     uint64_t ino;    // Inode number
-    uint64_t size;   // Size in bytes
-    uint32_t flags;  // Attributes
+    uint16_t flags;  // Inode flags
+    uint16_t mode;   // Permissions
     uint32_t links;  // Number of hard links
-    uint64_t atime;  // Accessed time
-    uint64_t mtime;  // Modified time
-    uint64_t ctime;  // Created time
     uint32_t uid;    // User ID
     uint32_t gid;    // Group ID
-    uint16_t mode;   // Permissions
+    uint64_t size;   // Size in bytes
     uint64_t blocks; // Number of blocks
     uint64_t blksz;  // Block size
+    uint64_t atime;  // Time of last access
+    uint64_t mtime;  // Time of last modification
+    uint64_t ctime;  // Time of last status change
 
-    vfs_mp_t *mp;    // Mountpoint
-    vfs_fs_t *fs;    // Filesystem
+    vfs_ops_t *ops;  // Filesystem operations
     void *data;      // Private filesystem data
     void *obj;       // Pointer to object (for memory backed filesystems)
 };
@@ -70,6 +70,7 @@ struct dentry {
     size_t negative;     // Number of negative entries
     inode_t *inode;      // Associated inode (zero for negative entries)
     atomic_t numfd;      // Number of file context references
+    vfs_mp_t *mp;        // Mountpoint
 
     dentry_t *parent;    // Parent entry
     dentry_t *child;     // Child entries
@@ -85,18 +86,18 @@ typedef struct {
 
 // File stat
 typedef struct {
-    uint64_t ino;     // Inode number
-    uint16_t flags;   // Inode flags
-    uint16_t mode;    // Permissions
-    uint32_t uid;     // User ID
-    uint32_t gid;     // Group ID
-    uint64_t size;    // File size
-    uint32_t blksz;   // File system block size for this object
-    uint32_t blocks;  // Number of blocks allocated for this object
-    uint32_t links;   // Number of hard links
-    uint64_t atime;   // Time of last access
-    uint64_t ctime;   // Time of last status change
-    uint64_t mtime;   // Time of last modification
+    uint64_t ino;    // Inode number
+    uint16_t flags;  // Inode flags
+    uint16_t mode;   // Permissions
+    uint32_t links;  // Number of hard links
+    uint32_t uid;    // User ID
+    uint32_t gid;    // Group ID
+    uint64_t size;   // Size in bytes
+    uint64_t blocks; // Number of blocks
+    uint64_t blksz;  // Block size
+    uint64_t atime;  // Time of last access
+    uint64_t mtime;  // Time of last modification
+    uint64_t ctime;  // Time of last status change
 } stat_t;
 
 // Context for an open file
@@ -110,8 +111,7 @@ typedef struct file {
 } file_t;
 
 // Filesystem operations
-// TODO: all of these should have another return type
-typedef struct {
+typedef struct vfs_ops {
     int (*open)(file_t*);
     int (*close)(file_t*);
     int (*read)(file_t*, size_t, void*);
@@ -130,7 +130,7 @@ typedef struct {
     int (*rmdir)(dentry_t*);
     void* (*mount)(devfs_t*, inode_t*);
     int (*umount)(void*);
-} vfs_ops_t;
+};
 
 // Stream device operations
 typedef struct {

@@ -41,4 +41,6 @@ int main(int argc, char *argv[])
     printf("Used  : %lu MB\n", (total - free)/1000000);
     printf("Free  : %lu MB\n", free/1000000);
     printf("Heap  : %lu MB\n", heap/1000000);
+
+    return 0;
 }

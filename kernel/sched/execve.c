@@ -199,9 +199,13 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
 
     // File descriptors
     ifd = fd_find(stdin);
-    ofd = fd_find(stdout);
+    if(!ifd)
+    {
+        return -EBADF;
+    }
 
-    if((ifd == 0) || (ofd == 0))
+    ofd = fd_find(stdout);
+    if(!ofd)
     {
         return -EBADF;
     }

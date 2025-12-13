@@ -1,6 +1,6 @@
 #include <kernel/vfs/iso9660.h>
-#include <kernel/vfs/ext2.h>
 #include <kernel/vfs/devfs.h>
+#include <kernel/vfs/ext2.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/vfs/fd.h>
 #include <kernel/sched/process.h>
@@ -19,14 +19,14 @@ static dentry_t *root = 0;
 
 static inline void dentry_open(dentry_t *dp)
 {
-    vfs_mp_t *mp = dp->inode->mp;
+    vfs_mp_t *mp = dp->mp;
     atomic_inc_fetch(&mp->numfd);
     atomic_inc_fetch(&dp->numfd);
 }
 
 static inline void dentry_close(dentry_t *dp)
 {
-    vfs_mp_t *mp = dp->inode->mp;
+    vfs_mp_t *mp = dp->mp;
     atomic_dec_fetch(&mp->numfd);
     atomic_dec_fetch(&dp->numfd);
 }
@@ -211,7 +211,7 @@ static vfs_path_t *vfs_new_path(const char *str)
     // so +2 below because of '\0' and because '/' might be added
     memsz = 2 + strlen(str) + sizeof(vfs_path_t);
     path = kzalloc(memsz);
-    if(path == 0)
+    if(!path)
     {
         return 0;
     }
@@ -263,8 +263,8 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp, bool mustexist)
     autofree(vfs_path_t) *path = 0;
     dentry_t *parent, *child;
     inode_t inode, *ip;
+    vfs_ops_t *ops;
     vfs_mp_t *mp;
-    vfs_fs_t *fs;
     int status;
 
     path = vfs_new_path(pathname);
@@ -294,7 +294,7 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp, bool mustexist)
         if(parent == root)
         {
             mp = vfs_find_mp(path->curr);
-            if(mp == 0)
+            if(!mp)
             {
                 return -ENOENT;
             }
@@ -314,10 +314,10 @@ static int vfs_walk_path(const char *pathname, dentry_t **dp, bool mustexist)
         else
         {
             ip = &inode;
-            fs = parent->inode->fs;
+            ops = parent->inode->ops;
             memset(ip, 0, sizeof(inode));
 
-            status = fs->ops->lookup(parent->inode, path->curr, ip);
+            status = ops->lookup(parent->inode, path->curr, ip);
             if(status < 0)
             {
                 if(status == -ENOENT)
@@ -447,8 +447,8 @@ int vfs_put_dirent(void *data, const char *name, inode_t *inode)
 int vfs_readdir(int id, size_t size, dirent_t *dirent)
 {
     int seek, status;
+    vfs_ops_t *ops;
     vfs_mp_t *mp;
-    vfs_fs_t *fs;
     dentry_t *dp;
     fd_t *fd;
 
@@ -465,7 +465,7 @@ int vfs_readdir(int id, size_t size, dirent_t *dirent)
 
     seek = fd->file->seek;
     dp = fd->file->dentry;
-    fs = dp->inode->fs;
+    ops = dp->inode->ops;
     mp = mpl.head;
 
     vfs_rd_t rd = {
@@ -530,7 +530,7 @@ int vfs_readdir(int id, size_t size, dirent_t *dirent)
             rd.parent = dp;
         }
 
-        status = fs->ops->readdir(fd->file, seek, &rd);
+        status = ops->readdir(fd->file, seek, &rd);
         if(status < 0)
         {
             return status;
@@ -637,8 +637,7 @@ int vfs_stat(const char *pathname, stat_t *stat)
 
 int vfs_read(int id, size_t size, void *buf)
 {
-    vfs_fs_t *fs;
-    inode_t *ip;
+    vfs_ops_t *ops;
     fd_t *fd;
 
     fd = fd_find(id);
@@ -657,16 +656,18 @@ int vfs_read(int id, size_t size, void *buf)
         return -EBADF;
     }
 
-    ip = fd->file->inode;
-    fs = ip->fs;
+    ops = fd->file->inode->ops;
+    if(!ops->read)
+    {
+        return -ENOTSUP;
+    }
 
-    return fs->ops->read(fd->file, size, buf);
+    return ops->read(fd->file, size, buf);
 }
 
 int vfs_write(int id, size_t size, void *buf)
 {
-    vfs_fs_t *fs;
-    inode_t *ip;
+    vfs_ops_t *ops;
     fd_t *fd;
 
     fd = fd_find(id);
@@ -685,16 +686,18 @@ int vfs_write(int id, size_t size, void *buf)
         return -EBADF;
     }
 
-    ip = fd->file->inode;
-    fs = ip->fs;
+    ops = fd->file->inode->ops;
+    if(!ops->write)
+    {
+        return -ENOTSUP;
+    }
 
-    return fs->ops->write(fd->file, size, buf);
+    return ops->write(fd->file, size, buf);
 }
 
 int vfs_seek(int id, long offset, int origin)
 {
-    vfs_fs_t *fs;
-    inode_t *ip;
+    vfs_ops_t *ops;
     fd_t *fd;
 
     fd = fd_find(id);
@@ -708,21 +711,18 @@ int vfs_seek(int id, long offset, int origin)
         return -EISDIR; // We might want to support this!
     }
 
-    ip = fd->file->inode;
-    fs = ip->fs;
-
-    if(fs->ops->seek == 0)
+    ops = fd->file->inode->ops;
+    if(!ops->seek)
     {
         return -ENOTSUP;
     }
 
-    return fs->ops->seek(fd->file, offset, origin);
+    return ops->seek(fd->file, offset, origin);
 }
 
 int vfs_ioctl(int id, size_t cmd, size_t val)
 {
-    vfs_fs_t *fs;
-    inode_t *ip;
+    vfs_ops_t *ops;
     fd_t *fd;
 
     fd = fd_find(id);
@@ -736,15 +736,13 @@ int vfs_ioctl(int id, size_t cmd, size_t val)
         return -EISDIR;
     }
 
-    ip = fd->file->inode;
-    fs = ip->fs;
-
-    if(fs->ops->ioctl == 0)
+    ops = fd->file->inode->ops;
+    if(!ops->ioctl)
     {
         return -ENOTSUP;
     }
 
-    return fs->ops->ioctl(fd->file, cmd, val);
+    return ops->ioctl(fd->file, cmd, val);
 }
 
 int vfs_chdir(const char *pathname)
@@ -830,7 +828,7 @@ int vfs_getcwd(char *pathname, int size)
 
 int vfs_open(const char *pathname, int flags)
 {
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     dentry_t *dp;
     inode_t *ip;
     int status;
@@ -867,7 +865,7 @@ int vfs_open(const char *pathname, int flags)
     }
 
     ip = dp->inode;
-    fs = ip->fs;
+    ops = ip->ops;
 
     if(flags & O_DIR)
     {
@@ -886,7 +884,7 @@ int vfs_open(const char *pathname, int flags)
 
     if(flags & O_READ)
     {
-        if(fs->ops->read == 0)
+        if(!ops->read)
         {
             return -ENOTSUP;
         }
@@ -894,7 +892,7 @@ int vfs_open(const char *pathname, int flags)
 
     if(flags & O_WRITE)
     {
-        if(fs->ops->write == 0)
+        if(!ops->write)
         {
             return -ENOTSUP;
         }
@@ -906,7 +904,7 @@ int vfs_open(const char *pathname, int flags)
         {
             return -EINVAL;
         }
-        if(fs->ops->truncate == 0)
+        if(!ops->truncate)
         {
             return -ENOTSUP;
         }
@@ -919,9 +917,9 @@ int vfs_open(const char *pathname, int flags)
     fd->file->dentry = dp;
     fd->file->inode = ip;
 
-    if(fs->ops->open)
+    if(ops->open)
     {
-        status = fs->ops->open(fd->file);
+        status = ops->open(fd->file);
         if(status < 0)
         {
             fd_delete(fd);
@@ -931,7 +929,7 @@ int vfs_open(const char *pathname, int flags)
 
     if(flags & O_TRUNC)
     {
-        status = fs->ops->truncate(ip);
+        status = ops->truncate(ip);
         if(status < 0)
         {
             fd_delete(fd);
@@ -945,8 +943,7 @@ int vfs_open(const char *pathname, int flags)
 
 int vfs_close(int id)
 {
-    vfs_fs_t *fs;
-    inode_t *ip;
+    vfs_ops_t *ops;
     file_t *file;
     int status;
     fd_t *fd;
@@ -966,16 +963,12 @@ int vfs_close(int id)
         return 0;
     }
 
-    ip = file->inode;
-    fs = ip->fs;
+    status = 0;
+    ops = file->inode->ops;
 
-    if(fs->ops->close)
+    if(ops->close)
     {
-        status = fs->ops->close(file);
-    }
-    else
-    {
-        status = 0;
+        status = ops->close(file);
     }
 
     dentry_close(file->dentry);
@@ -987,7 +980,7 @@ int vfs_close(int id)
 int vfs_create(const char *pathname, int mode)
 {
     timeval_t tv;
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     dentry_t *dp;
     inode_t *ip;
     int status;
@@ -1003,8 +996,8 @@ int vfs_create(const char *pathname, int mode)
         return -EEXIST;
     }
 
-    fs = dp->parent->inode->fs;
-    if(fs->ops->create == 0)
+    ops = dp->parent->inode->ops;
+    if(!ops->create)
     {
         return -ENOTSUP;
     }
@@ -1021,7 +1014,7 @@ int vfs_create(const char *pathname, int mode)
     ip->ctime = tv.tv_sec;
     ip->mtime = tv.tv_sec;
 
-    status = fs->ops->create(dp);
+    status = ops->create(dp);
     if(status < 0)
     {
         dcache_mark_negative(dp);
@@ -1032,7 +1025,7 @@ int vfs_create(const char *pathname, int mode)
 
 int vfs_remove(const char *pathname)
 {
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     dentry_t *dp;
     int status;
 
@@ -1052,13 +1045,13 @@ int vfs_remove(const char *pathname)
         return -EBUSY;
     }
 
-    fs = dp->inode->fs;
-    if(fs->ops->remove == 0)
+    ops = dp->inode->ops;
+    if(!ops->remove)
     {
         return -ENOTSUP;
     }
 
-    status = fs->ops->remove(dp);
+    status = ops->remove(dp);
     if(!status)
     {
         dcache_mark_negative(dp);
@@ -1070,7 +1063,7 @@ int vfs_remove(const char *pathname)
 int vfs_rename(const char *oldpath, const char *newpath)
 {
     dentry_t *src, *dst, *tmp;
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     int status;
 
     status = vfs_walk_path(oldpath, &src, true);
@@ -1106,7 +1099,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
     }
 
     // cross device check
-    if(src->inode->mp != dst->parent->inode->mp)
+    if(src->mp != dst->mp)
     {
         return -EXDEV;
     }
@@ -1125,13 +1118,13 @@ int vfs_rename(const char *oldpath, const char *newpath)
         }
     }
 
-    fs = src->inode->fs;
-    if(fs->ops->rename == 0)
+    ops = src->inode->ops;
+    if(!ops->rename)
     {
         return -ENOTSUP;
     }
 
-    status = fs->ops->rename(src, dst);
+    status = ops->rename(src, dst);
     if(status < 0)
     {
         return status;
@@ -1146,7 +1139,7 @@ int vfs_rename(const char *oldpath, const char *newpath)
 int vfs_mkdir(const char *pathname, int mode)
 {
     timeval_t tv;
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     dentry_t *dp;
     inode_t *ip;
     int status;
@@ -1162,8 +1155,8 @@ int vfs_mkdir(const char *pathname, int mode)
         return -EEXIST;
     }
 
-    fs = dp->parent->inode->fs;
-    if(fs->ops->mkdir == 0)
+    ops = dp->parent->inode->ops;
+    if(!ops->mkdir)
     {
         return -ENOTSUP;
     }
@@ -1180,7 +1173,7 @@ int vfs_mkdir(const char *pathname, int mode)
     ip->ctime = tv.tv_sec;
     ip->mtime = tv.tv_sec;
 
-    status = fs->ops->mkdir(dp);
+    status = ops->mkdir(dp);
     if(status < 0)
     {
         dcache_mark_negative(dp);
@@ -1191,7 +1184,7 @@ int vfs_mkdir(const char *pathname, int mode)
 
 int vfs_rmdir(const char *pathname)
 {
-    vfs_fs_t *fs;
+    vfs_ops_t *ops;
     dentry_t *dp;
     int status;
 
@@ -1211,13 +1204,13 @@ int vfs_rmdir(const char *pathname)
         return -EBUSY;
     }
 
-    fs = dp->inode->fs;
-    if(fs->ops->rmdir == 0)
+    ops = dp->inode->ops;
+    if(!ops->rmdir)
     {
         return -ENOTSUP;
     }
 
-    status = fs->ops->rmdir(dp);
+    status = ops->rmdir(dp);
     if(!status)
     {
         dcache_mark_negative(dp);
@@ -1248,7 +1241,7 @@ int vfs_mount(const char *source, const char *fstype, const char *target)
     }
 
     fs = vfs_find_fs(fstype);
-    if(fs == 0)
+    if(!fs)
     {
         return -ENOFS;
     }
@@ -1280,7 +1273,7 @@ int vfs_mount(const char *source, const char *fstype, const char *target)
 
     memset(&inode, 0, sizeof(inode_t));
     data = fs->ops->mount(dev, &inode);
-    if(data == 0)
+    if(!data)
     {
         return -EFAIL;
     }
@@ -1291,18 +1284,19 @@ int vfs_mount(const char *source, const char *fstype, const char *target)
         return -ENOMEM;
     }
 
+    inode.ops = fs->ops;
+    inode.data = data;
+    dp = &mp->dentry;
+
     strcpy(mp->name, target);
     mp->fs = fs;
     mp->dev = dev;
-
     mp->inode = inode;
-    mp->inode.fs = fs;
-    mp->inode.mp = mp;
-    mp->inode.data = data;
 
-    strcpy(mp->dentry.name, target);
-    mp->dentry.inode = &mp->inode;
-    mp->dentry.parent = root;
+    strcpy(dp->name, target);
+    dp->inode = &mp->inode;
+    dp->parent = root;
+    dp->mp = mp;
 
     list_insert(&mpl, mp);
 
@@ -1358,7 +1352,12 @@ int vfs_register(const char *fstype, vfs_ops_t *ops)
         return -EEXIST;
     }
 
-    if(ops->mount == 0 || ops->umount == 0)
+    if(!ops->mount)
+    {
+        return -EINVAL;
+    }
+
+    if(!ops->umount)
     {
         return -EINVAL;
     }
@@ -1382,14 +1381,9 @@ void vfs_init()
     static vfs_ops_t ops = {0};
     static vfs_mp_t mp = {0};
 
-    static vfs_fs_t fs = {
-        .ops = &ops,
-    };
-
     static inode_t inode = {
         .flags = I_DIR,
-        .fs = &fs,
-        .mp = &mp,
+        .ops = &ops,
         .uid = 0,
         .gid = 0,
         .mode = 0755,
@@ -1397,7 +1391,8 @@ void vfs_init()
     };
 
     static dentry_t dentry = {
-        .inode = &inode
+        .inode = &inode,
+        .mp = &mp,
     };
 
     if(root)
