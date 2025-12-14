@@ -3,6 +3,8 @@
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 
+// make all of this into a channel/stream instead
+
 static inline void wake(pipe_io_t *io)
 {
     acquire_lock(&io->lock);
@@ -59,6 +61,15 @@ int pipe_delete(pipe_t *pipe)
     kfree(pipe);
 
     return 0;
+}
+
+bool pipe_empty(pipe_t *pipe)
+{
+    if(pipe->head == pipe->tail)
+    {
+        return true;
+    }
+    return false;
 }
 
 int pipe_write(pipe_t *pipe, int maxlen, void *data)

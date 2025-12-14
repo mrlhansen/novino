@@ -4,12 +4,13 @@
 
 // The init process cannot read from stdin
 
-#define SH_MAX 2
+#define SH_MAX 4
 
 typedef struct {
     FILE *vts;
     long pid;
     int id;
+    int fd;
 } sh_t;
 
 void spawn_shell(sh_t *sh)
@@ -28,6 +29,7 @@ void spawn_shell(sh_t *sh)
             return;
         }
         setvbuf(sh->vts, 0, _IOLBF, 0);
+        sh->fd = fileno(sh->vts);
     }
 
     // arguments
@@ -46,7 +48,7 @@ void spawn_shell(sh_t *sh)
 
     // execute shell
     fprintf(sh->vts, "init: launching %s on /devices/vts%d\n", argv[0], sh->id);
-    sh->pid = spawnvef(argv[0], argv, envp, sh->vts, sh->vts);
+    sh->pid = spawnvef(argv[0], argv, envp, sh->fd, sh->fd);
     if(sh->pid < 0)
     {
         fprintf(sh->vts, "init: failed to spawn shell\n");

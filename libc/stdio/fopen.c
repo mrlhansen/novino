@@ -3,16 +3,12 @@
 #include <_stdio.h>
 #include <stdlib.h>
 
-FILE *fopen(const char *filename, const char *mode)
+static int parse_mode(const char *mode, int *kf, int *uf)
 {
-    int kflags = 0;
-    int uflags = 0;
     int r = 0;
     int w = 0;
     int a = 0;
     int p = 0;
-    int fd;
-    FILE *fp;
 
     while(*mode)
     {
@@ -36,39 +32,75 @@ FILE *fopen(const char *filename, const char *mode)
 
     if(r + w + a != 1)
     {
-        // set errno
-        return 0;
+        errno = EINVAL;
+        return -1;
     }
 
     if(r && p)
     {
-        kflags = O_READ | O_WRITE;
-        uflags = F_READ | F_WRITE;
+        *kf = O_READ | O_WRITE;
+        *uf = F_READ | F_WRITE;
     }
     else if(r)
     {
-        kflags = O_READ;
-        uflags = F_READ;
+        *kf = O_READ;
+        *uf = F_READ;
     }
     else if(w && p)
     {
-        kflags = O_READ | O_WRITE | O_TRUNC | O_CREATE;
-        uflags = F_READ | F_WRITE;
+        *kf = O_READ | O_WRITE | O_TRUNC | O_CREATE;
+        *uf = F_READ | F_WRITE;
     }
     else if(w)
     {
-        kflags = O_WRITE | O_TRUNC | O_CREATE;
-        uflags = F_WRITE;
+        *kf = O_WRITE | O_TRUNC | O_CREATE;
+        *uf = F_WRITE;
     }
     else if(a && p)
     {
-        kflags = O_READ | O_WRITE | O_APPEND | O_CREATE;
-        uflags = F_READ | F_WRITE | F_APPEND;
+        *kf = O_READ | O_WRITE | O_APPEND | O_CREATE;
+        *uf = F_READ | F_WRITE | F_APPEND;
     }
     else if(a)
     {
-        kflags = O_WRITE | O_APPEND | O_CREATE;
-        uflags = F_WRITE | F_APPEND;
+        *kf = O_WRITE | O_APPEND | O_CREATE;
+        *uf = F_WRITE | F_APPEND;
+    }
+
+    return 0;
+}
+
+FILE *fdopen(int fd, const char *mode)
+{
+    FILE *fp;
+    int kflags;
+    int uflags;
+
+    if(parse_mode(mode, &kflags, &uflags) < 0)
+    {
+        return NULL;
+    }
+
+    fp = __libc_fd_alloc(fd);
+    if(!fp)
+    {
+        return NULL;
+    }
+    fp->flags = uflags;
+
+    return fp;
+}
+
+FILE *fopen(const char *filename, const char *mode)
+{
+    FILE *fp;
+    int kflags;
+    int uflags;
+    int fd;
+
+    if(parse_mode(mode, &kflags, &uflags) < 0)
+    {
+        return NULL;
     }
 
     fd = sys_open(filename, kflags);
@@ -79,7 +111,7 @@ FILE *fopen(const char *filename, const char *mode)
     }
 
     fp = __libc_fd_alloc(fd);
-    if(fp == NULL)
+    if(!fp)
     {
         sys_close(fd);
         return NULL;

@@ -15,6 +15,7 @@ extern FILE *stdout;
 /* file operations */
 
 FILE *fopen(const char *filename, const char *mode);
+FILE *fdopen(int fd, const char *mode);
 int fclose(FILE *fp);
 size_t fread(void *ptr, size_t size, size_t count, FILE *fp);
 size_t fwrite(const void *ptr, size_t size, size_t count, FILE *fp);
@@ -23,6 +24,7 @@ int feof(FILE *fp);
 int ferror(FILE *fp);
 void clearerr(FILE *fp);
 int fflush(FILE *fp);
+int fileno(FILE *fp);
 
 int fgetpos(FILE *fp, fpos_t *pos);
 int fsetpos(FILE *fp, const fpos_t *pos);

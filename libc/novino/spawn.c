@@ -3,11 +3,11 @@
 #include <_stdlib.h>
 #include <_stdio.h>
 
-pid_t spawnvef(const char *pathname, char *const argv[], char *const envp[], FILE *stdin, FILE *stdout)
+pid_t spawnvef(const char *pathname, char *const argv[], char *const envp[], int ifd, int ofd)
 {
     long status;
 
-    status = sys_spawnve(pathname, argv, envp, stdin->fd, stdout->fd);
+    status = sys_spawnve(pathname, argv, envp, ifd, ofd);
     if(status < 0)
     {
         errno = -status;
@@ -18,12 +18,12 @@ pid_t spawnvef(const char *pathname, char *const argv[], char *const envp[], FIL
 
 pid_t spawnve(const char *pathname, char *const argv[], char *const envp[])
 {
-    return spawnvef(pathname, argv, envp, stdin, stdout);
+    return spawnvef(pathname, argv, envp, stdin->fd, stdout->fd);
 }
 
 pid_t spawnv(const char *pathname, char *const argv[])
 {
-    return spawnvef(pathname, argv, environ, stdin, stdout);
+    return spawnvef(pathname, argv, environ, stdin->fd, stdout->fd);
 }
 
 pid_t wait(pid_t pid, int *status)

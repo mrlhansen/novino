@@ -16,7 +16,10 @@ static int pipefs_read(file_t *file, size_t size, void *buf)
     fs = file->data;
     if(!fs->wr)
     {
-        return 0;
+        if(pipe_empty(fs->pipe))
+        {
+            return 0;
+        }
     }
 
     return pipe_read(fs->pipe, size, buf);
