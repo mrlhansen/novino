@@ -12,6 +12,8 @@ pid_t getpid();
 
 int getopt(int argc, char * const argv[], const char *optstring);
 
+int close(int fd);
+
 int chdir(const char *path);
 char *getcwd(char *buf, size_t size);
 

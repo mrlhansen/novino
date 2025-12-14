@@ -53,6 +53,10 @@ static int pipefs_close(file_t *file)
     if(file == fs->wr)
     {
         fs->wr = 0;
+        if(fs->rd)
+        {
+            pipe_write(fs->pipe, 0, 0);
+        }
     }
 
     if(!fs->rd && !fs->wr)

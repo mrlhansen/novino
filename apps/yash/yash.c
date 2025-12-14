@@ -11,6 +11,7 @@
 char *autocomplete(char *str, int suggest);
 
 extern char **environ;
+static long auxv[32];
 static char *cmdv[32];
 static char cmds[256];
 static char cwd[256];
@@ -20,9 +21,44 @@ static int hist_max;
 static int hist_len;
 static char **hist;
 
+typedef struct {
+    int argc;
+    char **argv;
+    int exitcode;
+    int wait;
+    pid_t pid;
+    int stdin;
+    int stdout;
+} args_t;
+
 static inline void print_shell()
 {
     printf("\e[94myash\e[0m:\e[32m%s\e[0m$ ", cwd);
+}
+
+static int validate_special(const char *str)
+{
+    if(strcmp(str, "&") == 0)
+    {
+        return 1;
+    }
+    if(strcmp(str, "&&") == 0)
+    {
+        return 2;
+    }
+    if(strcmp(str, "|") == 0)
+    {
+        return 3;
+    }
+    if(strcmp(str, "||") == 0)
+    {
+        return 4;
+    }
+    if(strcmp(str, ";") == 0)
+    {
+        return 5;
+    }
+    return -1;
 }
 
 static int parse_cmdline(char *str)
@@ -30,6 +66,7 @@ static int parse_cmdline(char *str)
     char *buf = cmds;
     char *start;
 
+    int special = 0;
     int escape = 0;
     int quote = 0;
     int count = 0;
@@ -70,6 +107,23 @@ static int parse_cmdline(char *str)
                 }
             }
 
+            if(strchr("&|;", *str) && !escape && !quote)
+            {
+                if(!special)
+                {
+                    special = 1;
+                    break;
+                }
+                else
+                {
+                    special = 2;
+                }
+            }
+            else if(special)
+            {
+                break;
+            }
+
             if((*str == '"' || *str == '\'') && !escape)
             {
                 if(quote)
@@ -96,6 +150,27 @@ static int parse_cmdline(char *str)
         if(buf > start)
         {
             *buf++ = '\0';
+            auxv[count] = 0;
+
+            if(special == 2)
+            {
+                special = validate_special(start);
+                if(special < 0)
+                {
+                    return -1;
+                }
+                if(!count)
+                {
+                    return -1;
+                }
+                if(auxv[count-1])
+                {
+                    return -1;
+                }
+                auxv[count] = special;
+                special = 0;
+            }
+
             cmdv[count++] = start;
         }
     }
@@ -108,6 +183,7 @@ static int parse_cmdline(char *str)
     cmdv[count] = 0;
     return count;
 }
+
 
 static char *yash_gets(char *str)
 {
@@ -398,7 +474,7 @@ static void setpwd()
     setenv("PWD", cwd, 1);
 }
 
-static void yash_export(int argc, char *argv[])
+static int yash_export(int argc, char *argv[])
 {
     char *pos;
     int n = 0;
@@ -416,7 +492,7 @@ static void yash_export(int argc, char *argv[])
         for(int i = 1; i < argc; i++)
         {
             pos = strchr(argv[i], '=');
-            if(pos == NULL)
+            if(!pos)
             {
                 printf("%s: %s: invalid environment variable\n", argv[0], argv[i]);
             }
@@ -427,17 +503,20 @@ static void yash_export(int argc, char *argv[])
             }
         }
     }
+
+    return 0;
 }
 
-static void yash_unset(int argc, char *argv[])
+static int yash_unset(int argc, char *argv[])
 {
     for(int i = 1; i < argc; i++)
     {
         unsetenv(argv[i]);
     }
+    return 0;
 }
 
-static void yash_cd(int argc, char *argv[])
+static int yash_cd(int argc, char *argv[])
 {
     char *path;
 
@@ -452,29 +531,30 @@ static void yash_cd(int argc, char *argv[])
     else
     {
         printf("%s: too many arguments\n", argv[0]);
-        return;
+        return 1;
     }
 
     if(chdir(path) < 0)
     {
         printf("%s: %s: %s\n", argv[0], path, strerror(errno));
+        return 1;
     }
-    else
-    {
-        setpwd();
-    }
+
+    setpwd();
+    return 0;
 }
 
-static void yash_echo(int argc, char *argv[])
+static int yash_echo(int argc, char *argv[])
 {
     for(int i = 1; i < argc; i++)
     {
         printf("%s ", argv[i]);
     }
     printf("\n");
+    return 0;
 }
 
-static void yash_history(int argc, char *argv[])
+static int yash_history(int argc, char *argv[])
 {
     int len = hist_len;
     int pos = 0;
@@ -489,49 +569,66 @@ static void yash_history(int argc, char *argv[])
         printf("% 3d  %s\n", i, hist[pos]);
         pos = (pos + 1) % hist_max;
     }
+
+    return 0;
 }
 
-static int run_builtin(int argc, char *argv[])
+static int yash_clear(int argc, char *argv[])
 {
-    if(strcmp(argv[0], "echo") == 0)
+    printf("\e[2J");
+    fflush(stdout);
+    return 0;
+}
+
+static int run_builtin(args_t *p)
+{
+    char **argv;
+    char *cmd;
+    int argc;
+
+    cmd  = p->argv[0];
+    argv = p->argv;
+    argc = p->argc;
+
+    if(strcmp(cmd, "echo") == 0)
     {
-        yash_echo(argc, argv);
+        p->exitcode = yash_echo(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "export") == 0)
+    else if(strcmp(cmd, "export") == 0)
     {
-        yash_export(argc, argv);
+        p->exitcode = yash_export(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "unset") == 0)
+    else if(strcmp(cmd, "unset") == 0)
     {
-        yash_unset(argc, argv);
+        p->exitcode = yash_unset(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "clear") == 0)
+    else if(strcmp(cmd, "clear") == 0)
     {
-        printf("\e[2J");
-        fflush(stdout);
+        p->exitcode = yash_clear(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "cd") == 0)
+    else if(strcmp(cmd, "cd") == 0)
     {
-        yash_cd(argc, argv);
+        p->exitcode = yash_cd(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "history") == 0)
+    else if(strcmp(cmd, "history") == 0)
     {
-        yash_history(argc, argv);
+        p->exitcode = yash_history(argc, argv);
         return 0;
     }
-    else if(strcmp(argv[0], "exit") == 0)
+    else if(strcmp(cmd, "exit") == 0)
     {
         exit(0);
     }
+
     return -1;
 }
 
-static int run_external(int argc, char *argv[])
+static int run_external(args_t *p)
 {
     const char *path;
     char filename[128];
@@ -539,26 +636,161 @@ static int run_external(int argc, char *argv[])
     long pid;
 
     path = getenv("PATH");
-    if(path == NULL)
+    if(!path)
     {
         return -1;
     }
 
-    sprintf(filename, "%s/%s.elf", path, argv[0]);
+    sprintf(filename, "%s/%s.elf", path, p->argv[0]);
     status = stat(filename, 0);
-    if(status == 0) // should check exec bit
+    if(!status)
     {
-        pid = spawnv(filename, argv);
+        pid = spawnvef(filename, p->argv, environ, p->stdin, p->stdout);
         if(pid < 0)
         {
-            printf("%s: cannot execute file\n", argv[0]);
-            return 0;
+            printf("%s: cannot execute file\n", p->argv[0]);
+            return -1;
         }
-        wait(pid, &status);
+        p->pid = pid;
+        if(p->wait)
+        {
+            wait(pid, &status);
+            p->exitcode = status;
+        }
         return 0;
     }
 
     return -1;
+}
+
+static int run_command(args_t *p)
+{
+    int status;
+
+    status = run_builtin(p);
+    if(!status)
+    {
+       return p->exitcode;
+    }
+
+    status = run_external(p);
+    if(!status)
+    {
+       return p->exitcode;
+    }
+
+    printf("%s: command not found\n", p->argv[0]);
+    return 127;
+}
+
+static int execute(int argc, char *argv[])
+{
+    int status;
+    int pipefd[2];
+    int ofd, ifd;
+    int aux;
+    int n = 0;
+
+    argv[argc] = ";";
+    auxv[argc] = 5;
+
+    ifd = fileno(stdin);
+    ofd = fileno(stdout);
+
+    args_t p = {
+        .stdin = ifd,
+        .stdout = ofd,
+    };
+
+    for(int i = 0; i <= argc; i++)
+    {
+        aux = auxv[i];
+        auxv[i] = 0;
+
+        if(!aux)
+        {
+            continue;
+        }
+
+        argv[i] = 0;
+        p.argc = i - n;
+        p.argv = argv + n;
+        p.pid = 0;
+        p.wait = 1;
+        p.exitcode = 0;
+
+        if(aux == 2)
+        {
+            status = run_command(&p);
+            if(p.stdin != ifd)
+            {
+                close(p.stdin);
+                p.stdin = ifd;
+            }
+            if(status)
+            {
+                argc = i;
+                break;
+            }
+        }
+        else if(aux == 3)
+        {
+            if(pipe(pipefd) < 0)
+            {
+                printf("failed to create pipe");
+                argc = i;
+                break;
+            }
+
+            p.wait = 0;
+            p.stdout = pipefd[1];
+            run_command(&p);
+            close(p.stdout);
+            p.stdout = ofd;
+            p.stdin = pipefd[0];
+        }
+        else if(aux == 4)
+        {
+            status = run_command(&p);
+            if(p.stdin != ifd)
+            {
+                close(p.stdin);
+                p.stdin = ifd;
+            }
+            if(!status)
+            {
+                argc = i;
+                break;
+            }
+        }
+        else if(aux == 5)
+        {
+            run_command(&p);
+            if(p.stdin != ifd)
+            {
+                close(p.stdin);
+                p.stdin = ifd;
+            }
+
+        }
+
+        if(!p.wait)
+        {
+            auxv[i] = p.pid;
+        }
+
+        n = i + 1;
+    }
+
+    for(int i = 0; i <= argc; i++)
+    {
+        if(auxv[i])
+        {
+            wait(auxv[i], &status);
+        }
+    }
+
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -594,19 +826,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        status = run_builtin(count, cmdv);
-        if(status == 0)
-        {
-            continue;
-        }
-
-        status = run_external(count, cmdv);
-        if(status == 0)
-        {
-            continue;
-        }
-
-        printf("%s: command not found\n", cmdv[0]);
+        execute(count, cmdv);
     }
 
     return 0;
