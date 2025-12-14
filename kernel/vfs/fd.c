@@ -2,25 +2,23 @@
 #include <kernel/mem/heap.h>
 #include <kernel/vfs/fd.h>
 
-fd_t *fd_create(file_t *file)
+fd_t *fd_create()
 {
     process_t *process;
+    file_t *file;
     fd_t *fd;
 
     fd = kzalloc(sizeof(fd_t));
-    if(fd == 0)
+    if(!fd)
     {
         return 0;
     }
 
-    if(file == 0)
+    file = kzalloc(sizeof(file_t));
+    if(!file)
     {
-        file = kzalloc(sizeof(file_t));
-        if(file == 0)
-        {
-            kfree(fd);
-            return 0;
-        }
+        kfree(fd);
+        return 0;
     }
 
     process = process_handle();
@@ -77,4 +75,29 @@ file_t *fd_delete(fd_t *fd)
     }
 
     return 0;
+}
+
+fd_t *fd_clone(fd_t *fd)
+{
+    file_t *file;
+
+    file = fd->file;
+    fd = kzalloc(sizeof(fd_t));
+    if(!fd)
+    {
+        return 0;
+    }
+
+    fd->file = file;
+    atomic_inc_fetch(&file->refs);
+
+    return fd;
+}
+
+void fd_adopt(fd_t *fd)
+{
+    process_t *process;
+    process = process_handle();
+    fd->id = process->fd.next++;
+    list_insert(&process->fd.list, fd);
 }

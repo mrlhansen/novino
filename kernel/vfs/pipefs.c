@@ -92,13 +92,13 @@ int vfs_mkpipe(int *fd)
         return -ENOMEM;
     }
 
-    rd = fd_create(0);
+    rd = fd_create();
     if(!rd)
     {
         return -ENOMEM;
     }
 
-    wr = fd_create(0);
+    wr = fd_create();
     if(!wr)
     {
         return -ENOMEM;

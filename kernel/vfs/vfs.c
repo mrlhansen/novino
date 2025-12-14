@@ -912,7 +912,7 @@ int vfs_open(const char *pathname, int flags)
 
     // TODO: append is not implemented
 
-    fd = fd_create(0);
+    fd = fd_create();
     fd->file->flags = flags;
     fd->file->dentry = dp;
     fd->file->inode = ip;

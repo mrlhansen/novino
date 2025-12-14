@@ -6,7 +6,6 @@
 #include <kernel/mem/map.h>
 #include <kernel/vfs/vfs.h>
 #include <kernel/errno.h>
-#include <kernel/debug.h> // tmp?
 #include <string.h>
 
 // TODO: There are so many places in this code where
@@ -162,10 +161,6 @@ static int execve_load(void *base, execve_t *opts)
     mm_init(&pr->mmap, USER_MMAP, USER_MMAP_SIZE);
     mm_map(&pr->mmap, PAGE_SIZE, MAP_STACK, &stack);
 
-    // Clone file descriptors
-    fd_create(opts->ifd);
-    fd_create(opts->ofd);
-
     // Free kernel variables
     kfree(opts->argv);
     kfree(opts->envp);
@@ -179,11 +174,10 @@ static int execve_load(void *base, execve_t *opts)
 static void execve_stub(void *base, execve_t *opts)
 {
     int status;
-
+    fd_adopt(opts->ifd);
+    fd_adopt(opts->ofd);
     status = execve_load(base, opts);
-    kp_info("execve", "failed with status: %d", status);
-
-    while(1);
+    process_exit(status);
 }
 
 pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdout)
@@ -250,8 +244,8 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
     // Copy arguments
     opts->argv = (void*)copy_argv(argv, 0);
     opts->envp = (void*)copy_argv(envp, 0);
-    opts->ifd = ifd->file;
-    opts->ofd = ofd->file;
+    opts->ifd = fd_clone(ifd);
+    opts->ofd = fd_clone(ofd);
 
     // Process name
     name = strrchr(filename, '/');

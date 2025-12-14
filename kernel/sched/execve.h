@@ -6,8 +6,8 @@
 typedef struct {
     char **argv;
     char **envp;
-    file_t *ofd;
-    file_t *ifd;
+    fd_t *ofd;
+    fd_t *ifd;
 } execve_t;
 
 void switch_to_user_mode(size_t rip, size_t rsp, size_t argv, size_t envp);
