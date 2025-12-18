@@ -66,7 +66,7 @@ static size_t copy_argv(char **argv, uint64_t addr)
     return end;
 }
 
-static int execve_load(void *base, execve_t *opts)
+static int execve_load(void *base, char **argv, char **envp)
 {
     size_t brk, stack;
     size_t varg, venv;
@@ -148,8 +148,8 @@ static int execve_load(void *base, execve_t *opts)
 
     // Copy arguments
     varg = brk;
-    venv = copy_argv(opts->argv, varg);
-    brk  = copy_argv(opts->envp, venv);
+    venv = copy_argv(argv, varg);
+    brk  = copy_argv(envp, venv);
 
     // Data segment
     pr = process_handle();
@@ -162,21 +162,19 @@ static int execve_load(void *base, execve_t *opts)
     mm_map(&pr->mmap, PAGE_SIZE, MAP_STACK, &stack);
 
     // Free kernel variables
-    kfree(opts->argv);
-    kfree(opts->envp);
-    kfree(opts);
+    kfree(argv);
+    kfree(envp);
+    kfree(base);
 
     // Execute
     switch_to_user_mode(rip, stack + PAGE_SIZE - 8, varg, venv); // TODO: The -8 fixes stack alignment!! Need to understand what GCC is doing here.
     return 0;
 }
 
-static void execve_stub(void *base, execve_t *opts)
+static void execve_stub(void *base, char **argv, char **envp)
 {
     int status;
-    fd_adopt(opts->ifd);
-    fd_adopt(opts->ofd);
-    status = execve_load(base, opts);
+    status = execve_load(base, argv, envp);
     process_exit(status);
 }
 
@@ -184,7 +182,6 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
 {
     process_t *process;
     thread_t *thread;
-    execve_t *opts;
     fd_t *ifd, *ofd;
     const char *name;
     elf64_ehdr *ehdr;
@@ -213,13 +210,12 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
     vfs_fstat(fd, &stat);
 
     // Allocate memory
-    opts = kzalloc(sizeof(*opts) + stat.size);
-    if(opts == 0)
+    ehdr = kzalloc(stat.size);
+    if(!ehdr)
     {
         vfs_close(fd);
         return -ENOMEM;
     }
-    ehdr = (void*)(opts+1);
 
     // Read file
     status = vfs_read(fd, stat.size, ehdr);
@@ -242,14 +238,12 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
     }
 
     // Copy arguments
-    opts->argv = (void*)copy_argv(argv, 0);
-    opts->envp = (void*)copy_argv(envp, 0);
-    opts->ifd = fd_clone(ifd);
-    opts->ofd = fd_clone(ofd);
+    argv = (void*)copy_argv(argv, 0);
+    envp = (void*)copy_argv(envp, 0);
 
     // Process name
     name = strrchr(filename, '/');
-    if(name == 0)
+    if(!name)
     {
         name = filename;
     }
@@ -258,13 +252,17 @@ pid_t execve(const char *filename, char **argv, char **envp, int stdin, int stdo
         name++;
     }
 
-    // Create new thread
-    thread = thread_create(name, execve_stub, ehdr, opts, 0);
+    // Create child
+    thread = thread_create(name, execve_stub, ehdr, argv, envp);
     thread_priority(thread, TPR_MID);
-
-    // Create new process
     process = process_create(name, 0, process_handle());
     process_append_thread(process, thread);
+
+    // Clone file descriptors
+    fd_clone(ifd, process);
+    fd_clone(ofd, process);
+
+    // Run child
     scheduler_append(thread);
 
     // Return PID of child

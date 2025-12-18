@@ -1,4 +1,3 @@
-#include <kernel/sched/process.h>
 #include <kernel/mem/heap.h>
 #include <kernel/vfs/fd.h>
 
@@ -69,7 +68,7 @@ file_t *fd_delete(fd_t *fd)
     refs = atomic_dec_fetch(&file->refs);
     kfree(fd);
 
-    if(refs == 0)
+    if(!refs)
     {
         return file;
     }
@@ -77,7 +76,7 @@ file_t *fd_delete(fd_t *fd)
     return 0;
 }
 
-fd_t *fd_clone(fd_t *fd)
+fd_t *fd_clone(fd_t *fd, process_t *target)
 {
     file_t *file;
 
@@ -88,16 +87,10 @@ fd_t *fd_clone(fd_t *fd)
         return 0;
     }
 
+    fd->id = target->fd.next++;
     fd->file = file;
     atomic_inc_fetch(&file->refs);
+    list_insert(&target->fd.list, fd);
 
     return fd;
-}
-
-void fd_adopt(fd_t *fd)
-{
-    process_t *process;
-    process = process_handle();
-    fd->id = process->fd.next++;
-    list_insert(&process->fd.list, fd);
 }

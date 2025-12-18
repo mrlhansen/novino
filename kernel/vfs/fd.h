@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel/vfs/types.h>
+#include <kernel/sched/process.h>
 
 typedef struct {
     int id;       // File descriptor ID (per process)
@@ -11,6 +12,4 @@ typedef struct {
 fd_t *fd_create();
 fd_t *fd_find(int id);
 file_t *fd_delete(fd_t *fd);
-
-fd_t *fd_clone(fd_t *fd);
-void fd_adopt(fd_t *fd);
+fd_t *fd_clone(fd_t *fd, process_t *target);

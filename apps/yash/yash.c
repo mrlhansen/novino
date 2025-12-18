@@ -797,7 +797,6 @@ int main(int argc, char *argv[])
 {
     char cmdline[128];
     int count;
-    int status;
 
     setpwd();
 
