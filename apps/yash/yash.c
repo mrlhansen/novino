@@ -58,6 +58,18 @@ static int validate_special(const char *str)
     {
         return 5;
     }
+    if(strcmp(str, ">") == 0)
+    {
+        return 6;
+    }
+    if(strcmp(str, ">>") == 0)
+    {
+        return 7;
+    }
+    if(strcmp(str, "<") == 0)
+    {
+        return 8;
+    }
     return -1;
 }
 
@@ -107,7 +119,7 @@ static int parse_cmdline(char *str)
                 }
             }
 
-            if(strchr("&|;", *str) && !escape && !quote)
+            if(strchr("&|;><", *str) && !escape && !quote)
             {
                 if(!special)
                 {
@@ -163,10 +175,6 @@ static int parse_cmdline(char *str)
                 {
                     return -1;
                 }
-                if(auxv[count-1])
-                {
-                    return -1;
-                }
                 auxv[count] = special;
                 special = 0;
             }
@@ -181,9 +189,56 @@ static int parse_cmdline(char *str)
     }
 
     cmdv[count] = 0;
+    auxv[count] = 5;
+
+    int curr = 0;
+    int prev = 0;
+
+    for(int i = 0; i < count; i++)
+    {
+        curr = auxv[i];
+        if(!curr)
+        {
+            continue;
+        }
+
+        if(curr >= 6 && curr <= 8)
+        {
+            i++;
+            if(i > count || auxv[i])
+            {
+                return -1;
+            }
+
+            i++;
+            if(i > count && !auxv[i])
+            {
+                return -1;
+            }
+            i--;
+        }
+
+        if(curr == 3)
+        {
+            if(prev == 6 || prev == 7)
+            {
+                return -1;
+            }
+        }
+
+        if(curr == 8)
+        {
+            if(prev == 3)
+            {
+                return -1;
+            }
+        }
+
+        prev = curr;
+    }
+
     return count;
 }
-
 
 static char *yash_gets(char *str)
 {
@@ -620,6 +675,16 @@ static int run_builtin(args_t *p)
         p->exitcode = yash_history(argc, argv);
         return 0;
     }
+    else if(strcmp(cmd, "true") == 0)
+    {
+        p->exitcode = 0;
+        return 0;
+    }
+    else if(strcmp(cmd, "false") == 0)
+    {
+        p->exitcode = 1;
+        return 0;
+    }
     else if(strcmp(cmd, "exit") == 0)
     {
         exit(0);
@@ -685,14 +750,12 @@ static int run_command(args_t *p)
 
 static int execute(int argc, char *argv[])
 {
+    FILE *fp;
     int status;
     int pipefd[2];
     int ofd, ifd;
     int aux;
     int n = 0;
-
-    argv[argc] = ";";
-    auxv[argc] = 5;
 
     ifd = fileno(stdin);
     ofd = fileno(stdout);
@@ -710,6 +773,11 @@ static int execute(int argc, char *argv[])
         if(!aux)
         {
             continue;
+        }
+
+        if(i == n)
+        {
+            break;
         }
 
         argv[i] = 0;
@@ -737,7 +805,7 @@ static int execute(int argc, char *argv[])
         {
             if(pipe(pipefd) < 0)
             {
-                printf("failed to create pipe");
+                printf("failed to create pipe\n");
                 argc = i;
                 break;
             }
@@ -772,6 +840,38 @@ static int execute(int argc, char *argv[])
                 p.stdin = ifd;
             }
 
+        }
+        else if(aux == 6)
+        {
+            i++;
+            fp = fopen(argv[i], "w");
+            if(!fp)
+            {
+                printf("%s: %s\n", argv[i], strerror(errno));
+                argc = i;
+                break;
+            }
+
+            p.stdout = fileno(fp);
+            run_command(&p);
+            fclose(fp);
+            p.stdout = ofd;
+        }
+        else if(aux == 8)
+        {
+            i++;
+            fp = fopen(argv[i], "r");
+            if(!fp)
+            {
+                printf("%s: %s\n", argv[i], strerror(errno));
+                argc = i;
+                break;
+            }
+
+            p.stdin = fileno(fp);
+            run_command(&p);
+            fclose(fp);
+            p.stdin = ifd;
         }
 
         if(!p.wait)
