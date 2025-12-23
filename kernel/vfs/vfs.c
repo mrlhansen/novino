@@ -638,86 +638,150 @@ int vfs_stat(const char *pathname, stat_t *stat)
 int vfs_read(int id, size_t size, void *buf)
 {
     vfs_ops_t *ops;
+    file_t *file;
     fd_t *fd;
+    int status;
 
     fd = fd_find(id);
-    if(fd == 0)
+    if(!fd)
     {
         return -EBADF;
     }
+    file = fd->file;
 
-    if(fd->file->flags & O_DIR)
+    if(file->flags & O_DIR)
     {
         return -EISDIR;
     }
 
-    if((fd->file->flags & O_READ) == 0)
+    if((file->flags & O_READ) == 0)
     {
         return -EBADF;
     }
 
-    ops = fd->file->inode->ops;
+    ops = file->inode->ops;
     if(!ops->read)
     {
         return -ENOTSUP;
     }
 
-    return ops->read(fd->file, size, buf);
+    if(file->inode->flags & I_FILE) // TODO: might need to be adjusted
+    {
+        if((file->seek + size) > file->inode->size)
+        {
+            size = file->inode->size - file->seek;
+        }
+
+        if(!size)
+        {
+            return 0;
+        }
+    }
+
+    status = ops->read(file, size, buf);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    if(file->inode->flags & I_FILE) // TODO: might need to be adjusted
+    {
+        file->seek += status;
+    }
+
+    return status;
 }
 
 int vfs_write(int id, size_t size, void *buf)
 {
     vfs_ops_t *ops;
+    file_t *file;
     fd_t *fd;
+    int status;
 
     fd = fd_find(id);
-    if(fd == 0)
+    if(!fd)
     {
         return -EBADF;
     }
+    file = fd->file;
 
-    if(fd->file->flags & O_DIR)
+    if(file->flags & O_DIR)
     {
         return -EISDIR;
     }
 
-    if((fd->file->flags & O_WRITE) == 0)
+    if((file->flags & O_WRITE) == 0)
     {
         return -EBADF;
     }
 
-    ops = fd->file->inode->ops;
+    ops = file->inode->ops;
     if(!ops->write)
     {
         return -ENOTSUP;
     }
 
-    return ops->write(fd->file, size, buf);
+    // TODO: append is not implemented
+
+    status = ops->write(file, size, buf);
+    if(status < 0)
+    {
+        return status;
+    }
+
+    if(file->inode->flags & I_FILE) // TODO: might need to be adjusted
+    {
+        file->seek += status;
+    }
+
+    return status;
 }
 
 int vfs_seek(int id, long offset, int origin)
 {
     vfs_ops_t *ops;
+    file_t *file;
+    size_t size;
     fd_t *fd;
 
     fd = fd_find(id);
-    if(fd == 0)
+    if(!fd)
     {
         return -EBADF;
     }
+    file = fd->file;
 
-    if(fd->file->flags & O_DIR)
+    if(file->flags & O_DIR)
     {
         return -EISDIR; // We might want to support this!
     }
 
-    ops = fd->file->inode->ops;
-    if(!ops->seek)
+    size = file->inode->size;
+    ops = file->inode->ops;
+
+    if(ops->seek)
     {
-        return -ENOTSUP;
+        return ops->seek(file, offset, origin);
     }
 
-    return ops->seek(fd->file, offset, origin);
+    switch(origin)
+    {
+        case SEEK_CUR:
+            offset = file->seek + offset;
+            break;
+        case SEEK_END:
+            offset = size + offset;
+            break;
+    }
+
+    if(offset < 0 || offset > size)
+    {
+        return -EINVAL;
+    }
+
+    file->seek = offset;
+    return offset;
 }
 
 int vfs_ioctl(int id, size_t cmd, size_t val)

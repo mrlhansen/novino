@@ -210,16 +210,6 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
     // (offset, whole) are in units of sectors
     // (fsize, fstart, esize) are in units of bytes
 
-    if((file->seek + size) > file->inode->size) // move this to vfs?
-    {
-        size = file->inode->size - file->seek;
-    }
-
-    if(!size)
-    {
-        return 0;
-    }
-
     offset = (file->seek / fs->bps) + file->inode->ino;
     fstart = (file->seek % fs->bps);
 
@@ -259,7 +249,7 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
 
     if(whole)
     {
-        status = blkdev_read(fs->dev, offset, whole, buf); // This does not work, buf is from user space and not accessible from the libata worker thread
+        status = blkdev_read(fs->dev, offset, whole, buf);
         if(status < 0)
         {
             return status;
@@ -278,35 +268,7 @@ static int iso9660_read(file_t *file, size_t size, void *buf)
         memcpy(buf, tmpbuf, esize);
     }
 
-    file->seek += size;
     return size;
-}
-
-static int iso9660_seek(file_t *file, ssize_t offset, int origin)
-{
-    inode_t *inode;
-    size_t size;
-
-    inode = file->inode;
-    size = inode->size;
-
-    switch(origin)
-    {
-        case SEEK_CUR:
-            offset = file->seek + offset;
-            break;
-        case SEEK_END:
-            offset = size + offset;
-            break;
-    }
-
-    if(offset < 0 || offset > size)
-    {
-        return -EINVAL;
-    }
-
-    file->seek = offset;
-    return offset;
 }
 
 static int iso9660_readdir(file_t *file, size_t seek, void *data)
@@ -463,7 +425,7 @@ void iso9660_init()
         .close = 0,
         .read = iso9660_read,
         .write = 0,
-        .seek = iso9660_seek,
+        .seek = 0,
         .ioctl = 0,
         .readdir = iso9660_readdir,
         .lookup = iso9660_lookup,

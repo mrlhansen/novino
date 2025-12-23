@@ -77,53 +77,10 @@ static void tar2inode(ustar_t *tar, inode_t *inode)
 
 static int initrd_read(file_t *file, size_t size, void *buf)
 {
-    ustar_t *tar;
     void *pos;
-
     pos = file->inode->obj;
-    tar = pos;
-
-    if((file->seek + size) > tar->isize)
-    {
-        size = tar->isize - file->seek;
-    }
-
-    if(!size)
-    {
-        return 0;
-    }
-
     memcpy(buf, pos + 512 + file->seek, size);
-    file->seek += size;
-
     return size;
-}
-
-static int initrd_seek(file_t *file, ssize_t offset, int origin)
-{
-    ustar_t *tar;
-    size_t fsz;
-
-    tar = file->inode->obj;
-    fsz = tar->isize;
-
-    switch(origin)
-    {
-        case SEEK_CUR:
-            offset = file->seek + offset;
-            break;
-        case SEEK_END:
-            offset = fsz + offset;
-            break;
-    }
-
-    if(offset < 0 || offset > fsz)
-    {
-        return -EINVAL;
-    }
-
-    file->seek = offset;
-    return file->seek;
 }
 
 static int initrd_readdir(file_t *file, size_t seek, void *data)
@@ -349,7 +306,7 @@ void initrd_init(uint64_t address, uint32_t size)
         .close = 0,
         .read = initrd_read,
         .write = 0,
-        .seek = initrd_seek,
+        .seek = 0,
         .ioctl = 0,
         .readdir = initrd_readdir,
         .lookup = initrd_lookup,

@@ -1686,16 +1686,6 @@ static int ext2_read(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
     // (offset, whole) are in units of blocks
     // (fsize, fstart, esize) are in units of bytes
 
-    if((file->seek + size) > ip->size) // move this to vfs?
-    {
-        size = ip->size - file->seek;
-    }
-
-    if(!size)
-    {
-        return 0;
-    }
-
     inode = ext2_inode_read(ctx, ip->ino, false);
     if(!inode)
     {
@@ -1774,7 +1764,6 @@ static int ext2_read(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
         memcpy(buf, blkbuf, esize);
     }
 
-    file->seek += size; // move to vfs?
     return size;
 }
 
@@ -1911,7 +1900,6 @@ static int ext2_write(ext2_ctx_t *ctx, file_t *file, size_t size, void *buf)
 
     ext2_inode_settime(inode, EXT2_MTIME);
     ext2_inode_getattr(fs, ip, inode, 0);
-    file->seek += size; // move to vfs?
 
     return size;
 }
@@ -2210,33 +2198,6 @@ static int ext2fs_write(file_t *file, size_t size, void *buf)
     ext2_ctx_free(ctx, status);
 
     return status;
-}
-
-static int ext2fs_seek(file_t *file, ssize_t offset, int origin)
-{
-    inode_t *inode;
-    size_t size;
-
-    inode = file->inode;
-    size = inode->size;
-
-    switch(origin)
-    {
-        case SEEK_CUR:
-            offset = file->seek + offset;
-            break;
-        case SEEK_END:
-            offset = size + offset;
-            break;
-    }
-
-    if(offset < 0 || offset > size)
-    {
-        return -EINVAL;
-    }
-
-    file->seek = offset;
-    return offset;
 }
 
 static int ext2fs_readdir(file_t *file, size_t seek, void *data)
@@ -2539,7 +2500,7 @@ void ext2_init()
         .close = 0,
         .read = ext2fs_read,
         .write = ext2fs_write,
-        .seek = ext2fs_seek,
+        .seek = 0,
         .ioctl = 0,
         .readdir = ext2fs_readdir,
         .lookup = ext2fs_lookup,
