@@ -296,7 +296,7 @@ int main(int argc, char *argv[])
 
     if(errflg)
     {
-        return -1;
+        return 1;
     }
 
     data = malloc(bufsz);
@@ -341,4 +341,6 @@ int main(int argc, char *argv[])
         }
         tok = strtok(NULL, ";");
     }
+
+    return 0;
 }

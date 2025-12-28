@@ -5,28 +5,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <errno.h>
-
-char *autocomplete(char *str, int suggest);
-
-typedef struct {
-    // Command
-    int sep;         // Separator
-    int argc;        // Argument count
-    char *argv[32];  // Argument list
-    char *ofs;       // Output file string
-    char *ifs;       // Input file string
-    // Child process
-    pid_t pid;       // Process ID
-    int wait;        // Wait in foreground
-    int exitcode;    // Exit code
-    int ofd;         // Output file descriptor
-    int ifd;         // Input file descriptor
-} args_t;
+#include "yash.h"
 
 extern char **environ;
-static char cmds[256];
 static args_t args[32];
 static char cwd[256];
 
@@ -38,263 +20,6 @@ static char **hist;
 static inline void print_shell()
 {
     printf("\e[94myash\e[0m:\e[32m%s\e[0m$ ", cwd);
-}
-
-static int validate_special(const char *str)
-{
-    if(strcmp(str, "&") == 0)
-    {
-        return 1;
-    }
-    if(strcmp(str, "&&") == 0)
-    {
-        return 2;
-    }
-    if(strcmp(str, "|") == 0)
-    {
-        return 3;
-    }
-    if(strcmp(str, "||") == 0)
-    {
-        return 4;
-    }
-    if(strcmp(str, ";") == 0)
-    {
-        return 5;
-    }
-    if(strcmp(str, ">") == 0)
-    {
-        return 6;
-    }
-    if(strcmp(str, ">>") == 0)
-    {
-        return 7;
-    }
-    if(strcmp(str, "<") == 0)
-    {
-        return 8;
-    }
-    return -1;
-}
-
-static inline void reset_args(args_t *args)
-{
-    memset(args, 0, sizeof(*args));
-    args->sep = 5;
-    args->ofd = fileno(stdout);
-    args->ifd = fileno(stdin);
-    args->wait = 1;
-}
-
-static int parse_cmdline(char *str, args_t *args)
-{
-    args_t *cmd;
-    char *start;
-    char *buf;
-
-    int special = 0;
-    int escape = 0;
-    int quote = 0;
-    int count = 0;
-    int expect = 0;
-
-    buf = cmds;
-    cmd = args;
-    reset_args(cmd);
-
-    while(*str)
-    {
-        while(isspace(*str))
-        {
-            str++;
-        }
-
-        if(*str == '\0')
-        {
-            break;
-        }
-
-        start = buf;
-
-        while(*str)
-        {
-            if(isspace(*str) && !quote && !escape)
-            {
-                break;
-            }
-
-            if(*str == '\0')
-            {
-                break;
-            }
-
-            if(*str == '\\')
-            {
-                if(!escape)
-                {
-                    escape = 1;
-                    str++;
-                    continue;
-                }
-            }
-
-            if(strchr("&|;><", *str) && !escape && !quote)
-            {
-                if(!special)
-                {
-                    special = 1;
-                    break;
-                }
-                else
-                {
-                    special = 2;
-                }
-            }
-            else if(special)
-            {
-                break;
-            }
-
-            if((*str == '"' || *str == '\'') && !escape)
-            {
-                if(quote)
-                {
-                    if(quote == *str)
-                    {
-                        quote = 0;
-                    }
-                }
-                else
-                {
-                    quote = *str;
-                }
-
-                str++;
-                continue;
-            }
-
-            *buf++ = *str;
-            escape = 0;
-            str++;
-        }
-
-        if(buf > start)
-        {
-            *buf = '\0';
-
-            if(special == 2)
-            {
-                special = validate_special(start);
-                if(special < 0)
-                {
-                    return -1;
-                }
-
-                if(special >= 6 && special <= 8)
-                {
-                    expect = special;
-                    special = 0;
-                    continue;
-                }
-
-                if(!cmd->argc)
-                {
-                    return -1;
-                }
-
-                cmd->sep = special;
-                special = 0;
-
-                count++;
-                buf = start;
-                cmd = args + count;
-                reset_args(cmd);
-            }
-            else
-            {
-                buf++;
-
-                if(expect == 6)
-                {
-                    if(cmd->ofs)
-                    {
-                        return -1;
-                    }
-                    cmd->ofs = start;
-                    expect = 0;
-                    continue;
-                }
-
-                if(expect == 8)
-                {
-                    if(cmd->ifs)
-                    {
-                        return -1;
-                    }
-                    cmd->ifs = start;
-                    expect = 0;
-                    continue;
-                }
-
-                cmd->argv[cmd->argc] = start;
-                cmd->argc++;
-            }
-        }
-    }
-
-    if(quote || escape || expect)
-    {
-        return -1;
-    }
-
-    if(cmd->argc)
-    {
-        count++;
-    }
-
-    cmd = args;
-
-    for(int i = 0; i < count; i++)
-    {
-        int first = !i;
-        int last  = !(count - i - 1);
-        int sep   = cmd[i].sep;
-
-        if(sep == 3)
-        {
-            if(cmd[i].ofs)
-            {
-                return -1;
-            }
-
-            if(!first)
-            {
-                if(cmd[i-1].ofs)
-                {
-                    return -1;
-                }
-            }
-
-            if(!last)
-            {
-                if(cmd[i+1].ifs)
-                {
-                    return -1;
-                }
-            }
-        }
-
-        if(last)
-        {
-            if(!(sep == 1 || sep == 5))
-            {
-                return -1;
-            }
-        }
-
-    }
-
-    return count;
 }
 
 static char *yash_gets(char *str)
@@ -458,6 +183,8 @@ static char *yash_gets(char *str)
             {
                 char *tmp;
                 int start = 0;
+
+                // TODO: escaping is not handled, we cannot autocomplete anything containing spaces
 
                 for(int i = pos - 1; i >= 0; i--)
                 {
@@ -828,7 +555,7 @@ static int execute(int count, args_t *args)
 
         if(cmd->ofs)
         {
-            fp = fopen(cmd->ofs, "w");
+            fp = fopen(cmd->ofs, "w"); // TODO: "fp" is not being freed here! should we use raw "open" instead?
             if(!fp)
             {
                 printf("%s: %s\n", cmd->ofs, strerror(errno));

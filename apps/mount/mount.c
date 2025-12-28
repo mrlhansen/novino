@@ -16,11 +16,9 @@ int main(int argc, char *argv[])
     if(status < 0)
     {
         printf("Mounting failed: %s\n", strerror(status));
-    }
-    else
-    {
-        printf("Successfully mounted %s on /%s\n", argv[1], argv[3]);
+        return 1;
     }
 
-    return status;
+    printf("Successfully mounted %s on /%s\n", argv[1], argv[3]);
+    return 0;
 }

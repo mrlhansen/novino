@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
     if(errflg)
     {
-        return -1;
+        return 1;
     }
 
     nargs = argc - optind;
@@ -94,9 +94,10 @@ int main(int argc, char *argv[])
         if(status)
         {
             printf("%s: %s: %s\n", argv[0], dest, strerror(errno));
+            errflg = 1;
         }
 
-        return 0;
+        return errflg;
     }
 
     for(int i = optind; i < argc - 1; i++)
@@ -111,8 +112,9 @@ int main(int argc, char *argv[])
         if(status)
         {
             printf("%s: %s: %s\n", argv[0], path, strerror(errno));
+            errflg = 1;
         }
     }
 
-    return 0;
+    return errflg;
 }

@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 
     if(errflg)
     {
-        return -1;
+        return 1;
     }
 
     if(optind == argc)
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
         else
         {
             fp = fopen(argv[i], "r");
-            if(fp == NULL)
+            if(!fp)
             {
                 printf("%s: %s: %s\n", argv[0], argv[i], strerror(errno));
                 errflg = 1;

@@ -16,11 +16,9 @@ int main(int argc, char *argv[])
     if(status < 0)
     {
         printf("Unmounting failed: %s\n", strerror(status));
-    }
-    else
-    {
-        printf("Successfully unmounted /%s\n", argv[1]);
+        return 1;
     }
 
-    return status;
+    printf("Successfully unmounted /%s\n", argv[1]);
+    return 0;
 }

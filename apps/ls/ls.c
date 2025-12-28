@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 
     if(errflg)
     {
-        return -1;
+        return 1;
     }
 
     if(optind == argc)
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
     for(int i = optind; i < argc; i++)
     {
         dp = opendir(argv[i]);
-        if(dp == NULL)
+        if(!dp)
         {
             printf("%s: %s: %s\n", argv[0], argv[i], strerror(errno));
             errflg = 1;

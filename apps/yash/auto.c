@@ -176,6 +176,8 @@ char *autocomplete(char *str, int suggest)
                 continue;
             }
 
+            // TODO: spaces and other special chars should be escaped
+
             if(dent->d_type == DT_DIR)
             {
                 mlen = sprintf(match, "%s/", dent->d_name);
