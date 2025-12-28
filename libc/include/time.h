@@ -19,8 +19,11 @@ struct tm {
     int tm_isdst;
 };
 
-char *asctime(const struct tm*);
-time_t mktime(struct tm*);
-struct tm *gmtime(const time_t*);
+char *asctime(const struct tm *tm);
+time_t mktime(struct tm *tm);
+struct tm *gmtime(const time_t *time);
+
+time_t time(time_t *time);
+double difftime(time_t end, time_t start);
 
 #endif
