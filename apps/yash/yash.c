@@ -10,26 +10,30 @@
 
 char *autocomplete(char *str, int suggest);
 
+typedef struct {
+    // Command
+    int sep;         // Separator
+    int argc;        // Argument count
+    char *argv[32];  // Argument list
+    char *ofs;       // Output file string
+    char *ifs;       // Input file string
+    // Child process
+    pid_t pid;       // Process ID
+    int wait;        // Wait in foreground
+    int exitcode;    // Exit code
+    int ofd;         // Output file descriptor
+    int ifd;         // Input file descriptor
+} args_t;
+
 extern char **environ;
-static long auxv[32];
-static char *cmdv[32];
 static char cmds[256];
+static args_t args[32];
 static char cwd[256];
 
 static int hist_pos;
 static int hist_max;
 static int hist_len;
 static char **hist;
-
-typedef struct {
-    int argc;
-    char **argv;
-    int exitcode;
-    int wait;
-    pid_t pid;
-    int stdin;
-    int stdout;
-} args_t;
 
 static inline void print_shell()
 {
@@ -73,15 +77,30 @@ static int validate_special(const char *str)
     return -1;
 }
 
-static int parse_cmdline(char *str)
+static inline void reset_args(args_t *args)
 {
-    char *buf = cmds;
+    memset(args, 0, sizeof(*args));
+    args->sep = 5;
+    args->ofd = fileno(stdout);
+    args->ifd = fileno(stdin);
+    args->wait = 1;
+}
+
+static int parse_cmdline(char *str, args_t *args)
+{
+    args_t *cmd;
     char *start;
+    char *buf;
 
     int special = 0;
     int escape = 0;
     int quote = 0;
     int count = 0;
+    int expect = 0;
+
+    buf = cmds;
+    cmd = args;
+    reset_args(cmd);
 
     while(*str)
     {
@@ -161,8 +180,7 @@ static int parse_cmdline(char *str)
 
         if(buf > start)
         {
-            *buf++ = '\0';
-            auxv[count] = 0;
+            *buf = '\0';
 
             if(special == 2)
             {
@@ -171,70 +189,109 @@ static int parse_cmdline(char *str)
                 {
                     return -1;
                 }
-                if(!count)
+
+                if(special >= 6 && special <= 8)
+                {
+                    expect = special;
+                    special = 0;
+                    continue;
+                }
+
+                if(!cmd->argc)
                 {
                     return -1;
                 }
-                auxv[count] = special;
-                special = 0;
-            }
 
-            cmdv[count++] = start;
+                cmd->sep = special;
+                special = 0;
+
+                count++;
+                buf = start;
+                cmd = args + count;
+                reset_args(cmd);
+            }
+            else
+            {
+                buf++;
+
+                if(expect == 6)
+                {
+                    if(cmd->ofs)
+                    {
+                        return -1;
+                    }
+                    cmd->ofs = start;
+                    expect = 0;
+                    continue;
+                }
+
+                if(expect == 8)
+                {
+                    if(cmd->ifs)
+                    {
+                        return -1;
+                    }
+                    cmd->ifs = start;
+                    expect = 0;
+                    continue;
+                }
+
+                cmd->argv[cmd->argc] = start;
+                cmd->argc++;
+            }
         }
     }
 
-    if(quote || escape)
+    if(quote || escape || expect)
     {
         return -1;
     }
 
-    cmdv[count] = 0;
-    auxv[count] = 5;
+    if(cmd->argc)
+    {
+        count++;
+    }
 
-    int curr = 0;
-    int prev = 0;
+    cmd = args;
 
     for(int i = 0; i < count; i++)
     {
-        curr = auxv[i];
-        if(!curr)
-        {
-            continue;
-        }
+        int first = !i;
+        int last  = !(count - i - 1);
+        int sep   = cmd[i].sep;
 
-        if(curr >= 6 && curr <= 8)
+        if(sep == 3)
         {
-            i++;
-            if(i > count || auxv[i])
+            if(cmd[i].ofs)
             {
                 return -1;
             }
 
-            i++;
-            if(i > count && !auxv[i])
+            if(!first)
             {
-                return -1;
+                if(cmd[i-1].ofs)
+                {
+                    return -1;
+                }
             }
-            i--;
+
+            if(!last)
+            {
+                if(cmd[i+1].ifs)
+                {
+                    return -1;
+                }
+            }
         }
 
-        if(curr == 3)
+        if(last)
         {
-            if(prev == 6 || prev == 7)
+            if(!(sep == 1 || sep == 5))
             {
                 return -1;
             }
         }
 
-        if(curr == 8)
-        {
-            if(prev == 3)
-            {
-                return -1;
-            }
-        }
-
-        prev = curr;
     }
 
     return count;
@@ -708,24 +765,26 @@ static int run_external(args_t *p)
 
     sprintf(filename, "%s/%s.elf", path, p->argv[0]);
     status = stat(filename, 0);
-    if(!status)
+    if(status < 0)
     {
-        pid = spawnvef(filename, p->argv, environ, p->stdin, p->stdout);
-        if(pid < 0)
-        {
-            printf("%s: cannot execute file\n", p->argv[0]);
-            return -1;
-        }
-        p->pid = pid;
-        if(p->wait)
-        {
-            wait(pid, &status);
-            p->exitcode = status;
-        }
-        return 0;
+        return -1;
     }
 
-    return -1;
+    pid = spawnvef(filename, p->argv, environ, p->ifd, p->ofd);
+    if(pid < 0)
+    {
+        printf("%s: cannot execute file\n", p->argv[0]); // strerror
+        return -1;
+    }
+
+    p->pid = pid;
+    if(p->wait)
+    {
+        wait(pid, &status);
+        p->exitcode = status;
+    }
+
+    return 0;
 }
 
 static int run_command(args_t *p)
@@ -748,145 +807,115 @@ static int run_command(args_t *p)
     return 127;
 }
 
-static int execute(int argc, char *argv[])
+static int execute(int count, args_t *args)
 {
+    args_t *cmd;
+    args_t *nxt;
     FILE *fp;
     int status;
     int pipefd[2];
     int ofd, ifd;
-    int aux;
-    int n = 0;
 
     ifd = fileno(stdin);
     ofd = fileno(stdout);
 
-    args_t p = {
-        .stdin = ifd,
-        .stdout = ofd,
-    };
-
-    for(int i = 0; i <= argc; i++)
+    for(int i = 0; i < count; i++)
     {
-        aux = auxv[i];
-        auxv[i] = 0;
+        cmd = args + i;
+        nxt = cmd + 1;
 
-        if(!aux)
+        // stdout and stdin via files
+
+        if(cmd->ofs)
         {
-            continue;
-        }
-
-        if(i == n)
-        {
-            break;
-        }
-
-        argv[i] = 0;
-        p.argc = i - n;
-        p.argv = argv + n;
-        p.pid = 0;
-        p.wait = 1;
-        p.exitcode = 0;
-
-        if(aux == 2)
-        {
-            status = run_command(&p);
-            if(p.stdin != ifd)
+            fp = fopen(cmd->ofs, "w");
+            if(!fp)
             {
-                close(p.stdin);
-                p.stdin = ifd;
+                printf("%s: %s\n", cmd->ofs, strerror(errno));
+                break;
             }
+            cmd->ofd = fileno(fp);
+        }
+
+        if(cmd->ifs)
+        {
+            fp = fopen(cmd->ifs, "r");
+            if(!fp)
+            {
+                printf("%s: %s\n", cmd->ifs, strerror(errno));
+                break;
+            }
+            cmd->ifd = fileno(fp);
+        }
+
+        // execute command
+
+        if(cmd->sep == 2)
+        {
+            status = run_command(cmd);
             if(status)
             {
-                argc = i;
                 break;
             }
         }
-        else if(aux == 3)
+        else if(cmd->sep == 3)
         {
             if(pipe(pipefd) < 0)
             {
                 printf("failed to create pipe\n");
-                argc = i;
                 break;
             }
 
-            p.wait = 0;
-            p.stdout = pipefd[1];
-            run_command(&p);
-            close(p.stdout);
-            p.stdout = ofd;
-            p.stdin = pipefd[0];
+            cmd->wait = 0;
+            cmd->ofd = pipefd[1];
+            run_command(cmd);
+            nxt->ifd = pipefd[0];
         }
-        else if(aux == 4)
+        else if(cmd->sep == 4)
         {
-            status = run_command(&p);
-            if(p.stdin != ifd)
-            {
-                close(p.stdin);
-                p.stdin = ifd;
-            }
+            status = run_command(cmd);
             if(!status)
             {
-                argc = i;
                 break;
             }
         }
-        else if(aux == 5)
+        else if(cmd->sep == 5)
         {
-            run_command(&p);
-            if(p.stdin != ifd)
-            {
-                close(p.stdin);
-                p.stdin = ifd;
-            }
-
-        }
-        else if(aux == 6)
-        {
-            i++;
-            fp = fopen(argv[i], "w");
-            if(!fp)
-            {
-                printf("%s: %s\n", argv[i], strerror(errno));
-                argc = i;
-                break;
-            }
-
-            p.stdout = fileno(fp);
-            run_command(&p);
-            fclose(fp);
-            p.stdout = ofd;
-        }
-        else if(aux == 8)
-        {
-            i++;
-            fp = fopen(argv[i], "r");
-            if(!fp)
-            {
-                printf("%s: %s\n", argv[i], strerror(errno));
-                argc = i;
-                break;
-            }
-
-            p.stdin = fileno(fp);
-            run_command(&p);
-            fclose(fp);
-            p.stdin = ifd;
+            run_command(cmd);
         }
 
-        if(!p.wait)
+        // close file descriptors early when possible
+
+        if(cmd->ofd != ofd)
         {
-            auxv[i] = p.pid;
+            close(cmd->ofd);
+            cmd->ofd = ofd;
         }
 
-        n = i + 1;
+        if(cmd->ifd != ifd)
+        {
+            close(cmd->ifd);
+            cmd->ifd = ifd;
+        }
     }
 
-    for(int i = 0; i <= argc; i++)
+    // close any remaining file descriptors (e.g. from breaking the loop)
+    // wait for background children to finish
+
+    for(int i = 0; i < count; i++)
     {
-        if(auxv[i])
+        cmd = args + i;
+        if(cmd->ofd != ofd)
         {
-            wait(auxv[i], &status);
+            close(cmd->ofd);
+        }
+        if(cmd->ifd != ifd)
+        {
+            close(cmd->ifd);
+        }
+        if(!cmd->wait)
+        {
+            wait(cmd->pid, &status);
         }
     }
 
@@ -915,7 +944,7 @@ int main(int argc, char *argv[])
             break;
         }
 
-        count = parse_cmdline(cmdline);
+        count = parse_cmdline(cmdline, args);
         if(count <= 0)
         {
             if(count < 0)
@@ -925,7 +954,7 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        execute(count, cmdv);
+        execute(count, args);
     }
 
     return 0;
