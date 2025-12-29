@@ -46,8 +46,8 @@ static inline void reset_args(args_t *args)
 {
     memset(args, 0, sizeof(*args));
     args->sep = 5;
-    args->ofd = fileno(stdout);
-    args->ifd = fileno(stdin);
+    args->ofd = FILENO_STDOUT;
+    args->ifd = FILENO_STDIN;
     args->wait = 1;
 }
 

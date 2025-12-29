@@ -82,10 +82,10 @@ static void spawn_init()
     pid_t pid;
     int fd;
 
-    fd = vfs_open("/devices/vts0", O_WRITE);
+    fd = vfs_open("/devices/console", O_WRITE);
     if(fd < 0)
     {
-        kp_crit("main", "failed to open /devices/vts0");
+        kp_crit("main", "failed to open /devices/console");
     }
 
     pid = execve("/initrd/apps/init.elf", 0, 0, fd, fd);

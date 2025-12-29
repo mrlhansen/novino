@@ -541,10 +541,6 @@ static int execute(int count, args_t *args)
     FILE *fp;
     int status;
     int pipefd[2];
-    int ofd, ifd;
-
-    ifd = fileno(stdin);
-    ofd = fileno(stdout);
 
     for(int i = 0; i < count; i++)
     {
@@ -613,16 +609,16 @@ static int execute(int count, args_t *args)
 
         // close file descriptors early when possible
 
-        if(cmd->ofd != ofd)
+        if(cmd->ofd != FILENO_STDOUT)
         {
             close(cmd->ofd);
-            cmd->ofd = ofd;
+            cmd->ofd = FILENO_STDOUT;
         }
 
-        if(cmd->ifd != ifd)
+        if(cmd->ifd != FILENO_STDIN)
         {
             close(cmd->ifd);
-            cmd->ifd = ifd;
+            cmd->ifd = FILENO_STDIN;
         }
     }
 
@@ -632,11 +628,11 @@ static int execute(int count, args_t *args)
     for(int i = 0; i < count; i++)
     {
         cmd = args + i;
-        if(cmd->ofd != ofd)
+        if(cmd->ofd != FILENO_STDOUT)
         {
             close(cmd->ofd);
         }
-        if(cmd->ifd != ifd)
+        if(cmd->ifd != FILENO_STDIN)
         {
             close(cmd->ifd);
         }

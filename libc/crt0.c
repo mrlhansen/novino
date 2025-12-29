@@ -1,5 +1,6 @@
 #include <_stdio.h>
 #include <_stdlib.h>
+#include <unistd.h>
 
 static int exitcode;
 extern int main(int argc, char *argv[]);
@@ -20,9 +21,9 @@ void __start(char **argv, char **envp)
     environ = envp;
     __libc_heap_init();
 
-    stdin = __libc_fd_alloc(0);
+    stdin = __libc_fd_alloc(FILENO_STDIN);
     stdin->flags = (F_READ | F_TEXT);
-    stdout = __libc_fd_alloc(1);
+    stdout = __libc_fd_alloc(FILENO_STDOUT);
     stdout->flags = (F_WRITE | F_TEXT);
 
     exitcode = main(argc, argv);

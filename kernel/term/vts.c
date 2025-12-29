@@ -153,18 +153,20 @@ void vts_init()
         {
             vts[i].console = console_default();
             vts[i].flags = 0;
+            strcpy(name, "console");
         }
         else if(i == 5)
         {
             fbmem_init(vts + i);
+            strcpy(name, "fbmem");
         }
         else
         {
             vts[i].console = console_clone();
             console_set_flags(vts[i].console, vts[i].flags);
+            sprintf(name, "vts%d", i);
         }
 
-        sprintf(name, "vts%d", i);
         devfs_stream_register(0, name, &ops, &vts[i], 0);
     }
 }

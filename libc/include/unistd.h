@@ -2,6 +2,9 @@
 
 #include <stddef.h>
 
+#define FILENO_STDIN  0
+#define FILENO_STDOUT 1
+
 extern char *optarg;
 extern int opterr;
 extern int optind;

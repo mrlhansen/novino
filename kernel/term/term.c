@@ -452,22 +452,22 @@ static void term_kbd_input(input_event_t *ev)
         switch(ev->code)
         {
             case KEY_F1:
-                term_switch(0);
-                break;
-            case KEY_F2:
                 term_switch(1);
                 break;
-            case KEY_F3:
+            case KEY_F2:
                 term_switch(2);
                 break;
-            case KEY_F4:
+            case KEY_F3:
                 term_switch(3);
                 break;
-            case KEY_F5:
+            case KEY_F4:
                 term_switch(4);
                 break;
-            case KEY_F6:
+            case KEY_F5:
                 term_switch(5);
+                break;
+            case KEY_F6:
+                term_switch(0);
                 break;
         }
         return;

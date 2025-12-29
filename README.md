@@ -11,7 +11,7 @@
 - Support for loading and running user mode programs
 - (Partial) implementation of `libc` for user space programs
 
-Here is a screenshot of the `yash` shell running in user space. There are multiple virtual terminals and you can use `ctrl+alt+fX` to swap between them. The first terminal (under `ctrl+alt+f1`) is the kernel message log.
+Here is a screenshot of the `yash` shell running in user space. There are multiple virtual terminals and you can use `ctrl+alt+fX` to swap between them. The last terminal (under `ctrl+alt+f6`) is the kernel message log.
 
 ![Novino](novino.png)
 
