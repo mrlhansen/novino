@@ -2,8 +2,8 @@
 
 #include <stddef.h>
 
-#define FILENO_STDIN  0
-#define FILENO_STDOUT 1
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
 
 extern char *optarg;
 extern int opterr;

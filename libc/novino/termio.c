@@ -6,7 +6,7 @@
 
 char *tiogets(char *buf, int len)
 {
-    len = read(FILENO_STDIN, buf, len-1);
+    len = read(STDIN_FILENO, buf, len-1);
     if(len == 0)
     {
         return NULL;
@@ -92,15 +92,15 @@ int tiogetescape(const char *str, int *key, int *va, int *vb)
 
 int tiosetflags(int flags)
 {
-    return ioctl(FILENO_STDOUT, TIOSETFLAGS, flags);
+    return ioctl(STDOUT_FILENO, TIOSETFLAGS, flags);
 }
 
 int tiogetflags(int *flags)
 {
-    return ioctl(FILENO_STDOUT, TIOGETFLAGS, flags);
+    return ioctl(STDOUT_FILENO, TIOGETFLAGS, flags);
 }
 
 int tiogetwinsz(tiowinsz_t *w)
 {
-    return ioctl(FILENO_STDOUT, TIOGETWINSZ, w);
+    return ioctl(STDOUT_FILENO, TIOGETWINSZ, w);
 }

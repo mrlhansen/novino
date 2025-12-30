@@ -609,16 +609,16 @@ static int execute(int count, args_t *args)
 
         // close file descriptors early when possible
 
-        if(cmd->ofd != FILENO_STDOUT)
+        if(cmd->ofd != STDOUT_FILENO)
         {
             close(cmd->ofd);
-            cmd->ofd = FILENO_STDOUT;
+            cmd->ofd = STDOUT_FILENO;
         }
 
-        if(cmd->ifd != FILENO_STDIN)
+        if(cmd->ifd != STDIN_FILENO)
         {
             close(cmd->ifd);
-            cmd->ifd = FILENO_STDIN;
+            cmd->ifd = STDIN_FILENO;
         }
     }
 
@@ -628,11 +628,11 @@ static int execute(int count, args_t *args)
     for(int i = 0; i < count; i++)
     {
         cmd = args + i;
-        if(cmd->ofd != FILENO_STDOUT)
+        if(cmd->ofd != STDOUT_FILENO)
         {
             close(cmd->ofd);
         }
-        if(cmd->ifd != FILENO_STDIN)
+        if(cmd->ifd != STDIN_FILENO)
         {
             close(cmd->ifd);
         }

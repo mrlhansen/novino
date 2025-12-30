@@ -21,9 +21,9 @@ void __start(char **argv, char **envp)
     environ = envp;
     __libc_heap_init();
 
-    stdin = __libc_fd_alloc(FILENO_STDIN);
+    stdin = __libc_fd_alloc(STDIN_FILENO);
     stdin->flags = (F_READ | F_TEXT);
-    stdout = __libc_fd_alloc(FILENO_STDOUT);
+    stdout = __libc_fd_alloc(STDOUT_FILENO);
     stdout->flags = (F_WRITE | F_TEXT);
 
     exitcode = main(argc, argv);
