@@ -65,3 +65,5 @@ void thread_priority(thread_t*, priority_t);
 
 thread_t *thread_create(const char*, void*, void*, void*, void*);
 thread_t *thread_handle();
+
+void thread_idle_cleaning();

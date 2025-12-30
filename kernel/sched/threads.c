@@ -3,7 +3,6 @@
 #include <kernel/mem/heap.h>
 #include <kernel/x86/smp.h>
 #include <kernel/x86/fpu.h>
-#include <kernel/debug.h>
 #include <string.h>
 
 static LIST_INIT(dead, thread_t, slink);
@@ -93,9 +92,8 @@ void thread_exit()
 
     thread = thread_handle();
     thread->state = TERMINATED;
-    process_remove_thread(thread);
-    // do we need the dead queue? Could we not just free the memory in the schedule handler and that's it?
-    list_append(&dead, thread); // we need something to free items in the dead queue
+    thread->yield = 1;
+    list_append(&dead, thread);
 
     scheduler_yield();
 }
@@ -196,4 +194,29 @@ void thread_wait()
     }
 
     restore_interrupts(&flags);
+}
+
+void thread_idle_cleaning()
+{
+    static lock_t lock = 0;
+    thread_t *item;
+
+    if(atomic_lock(&lock))
+    {
+        return;
+    }
+
+    while(item = list_head(&dead), item)
+    {
+        if(item->yield)
+        {
+            break;
+        }
+
+        list_pop(&dead);
+        process_remove_thread(item);
+        kfree(item);
+    }
+
+    atomic_unlock(&lock);
 }

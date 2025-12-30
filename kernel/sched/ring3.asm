@@ -7,9 +7,9 @@
 global switch_to_user_mode:function (switch_to_user_mode.end - switch_to_user_mode)
 switch_to_user_mode:
     cli
-    mov ax, 0x1B
-    mov ds, ax
-    mov es, ax
+    ; mov ax, 0x1B
+    ; mov ds, ax
+    ; mov es, ax
     push 0x1B        ; ss
     push rsi         ; rsp
     push 0x202       ; rflags (enable interrupts)

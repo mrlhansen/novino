@@ -8,6 +8,8 @@ static void kthreads_idle()
 {
     while(1)
     {
+        thread_idle_cleaning();
+        process_idle_cleaning();
         asm volatile("hlt");
     }
 }

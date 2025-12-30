@@ -11,7 +11,7 @@ static void cat(FILE *fp)
     int line = 1;
     int size;
 
-    while(size = fread(buf, 1, 512, fp), size > 0)
+    while(size = fread(buf, 1, sizeof(buf) - 1, fp), size > 0)
     {
         buf[size] = '\0';
         if(nflg)

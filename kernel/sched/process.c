@@ -8,7 +8,8 @@
 #include <kernel/errno.h>
 #include <string.h>
 
-static LIST_INIT(global_process_list, process_t, plink);
+static LIST_INIT(active, process_t, plink);
+static LIST_INIT(reaped, process_t, plink);
 
 static pid_t next_pid()
 {
@@ -67,13 +68,12 @@ pid_t process_wait(pid_t pid, int *status)
 
     if(child)
     {
-        list_remove(&self->children, child);
-        list_remove(&global_process_list, child);
-
         *status  = child->exitcode;
         pid = child->pid;
 
-        // kfree(process); -- race condition, child might still be running -- idle thread for cleaning this up
+        list_remove(&self->children, child);
+        list_remove(&active, child);
+        list_append(&reaped, child);
 
         return pid;
     }
@@ -207,16 +207,41 @@ process_t *process_create(const char *name, uint64_t pml4, process_t *parent)
     vfs_proc_init(process, process->cwd);
 
     // Append to list of processes
-    list_insert(&global_process_list, process);
+    list_insert(&active, process);
 
     // Return process
     return process;
 }
 
+void process_idle_cleaning()
+{
+    static lock_t lock = 0;
+    process_t *item;
+
+    if(atomic_lock(&lock))
+    {
+        return;
+    }
+
+    while(item = list_head(&reaped), item)
+    {
+        if(item->threads.length)
+        {
+            break;
+        }
+
+        list_pop(&reaped);
+        // TODO: mm_destroy ?
+        kfree(item);
+    }
+
+    atomic_unlock(&lock);
+}
+
 void sysinfo_proclist(sysinfo_t *sys)
 {
     process_t *item = 0;
-    while(item = list_iterate_reverse(&global_process_list, item), item)
+    while(item = list_iterate_reverse(&active, item), item)
     {
         sysinfo_write(sys, "%d", item->pid);
     }
@@ -227,7 +252,7 @@ void sysinfo_procinfo(sysinfo_t *sys, size_t pid)
     process_t *item = 0;
     thread_t *th = 0;
 
-    while(item = list_iterate(&global_process_list, item), item)
+    while(item = list_iterate(&active, item), item)
     {
         if(item->pid == pid)
         {

@@ -219,7 +219,7 @@ int hpet_init()
     hpet_write(HPET_CNT, 0);
 
     // Setup system timer
-    if(hpet_system_timer())
+    if(hpet_system_timer() < 0)
     {
         return -EFAIL;
     }
