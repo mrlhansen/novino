@@ -174,27 +174,26 @@ isr_schedule:
     save_registers                  ; push all general purpose registers to stack
 
     mov rbp, dr3                    ; address of scheduler struct (rbp is callee save)
-    mov ebx, dword [xsave_support]  ; value of xsave support (ebx is callee save)
     mov rax, [rbp+0]                ; address of scheduling stack
+    mov rbp, [rbp+8]                ; address of extended state context
+    mov ebx, dword [xsave_support]  ; value of xsave support (rbx is callee save)
 
-    mov rcx, [rbp+8]                ; address of extended state context
     cmp ebx, 0                      ; check for xsave support
     je .fxs                         ; jump if not supported
-    xsave [rcx]                     ; save context
+    xsave [rbp]                     ; save context
 .fxs:
-    fxsave [rcx]                    ; save context (legacy)
+    fxsave [rbp]                    ; save context (legacy)
 
     mov rdi, rsp                    ; rdi is first argument for schedule_handler
     mov rsp, rax                    ; switch to scheduling stack
     call schedule_handler           ; call handler
     mov rsp, rax                    ; load new thread stack
 
-    mov rcx, [rbp+8]                ; address of extended state context
     cmp ebx, 0                      ; check for xsave support
     je .fxr                         ; jump if not supported
-    xrstor [rcx]                    ; restore context
+    xrstor [rbp]                    ; restore context
 .fxr:
-    fxrstor [rcx]                   ; restore context (legacy)
+    fxrstor [rbp]                   ; restore context (legacy)
 
     restore_registers               ; pop all general purpose registers from the stack
     iretq                           ; return from interrupt

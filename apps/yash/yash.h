@@ -7,8 +7,9 @@ typedef struct {
     int sep;         // Separator
     int argc;        // Argument count
     char *argv[32];  // Argument list
-    char *ofs;       // Output file string
-    char *ifs;       // Input file string
+    char *ofn;       // Output file name
+    char *ofm;       // Output file mode
+    char *ifn;       // Input file name
     // Child process
     pid_t pid;       // Process ID
     int wait;        // Wait in foreground

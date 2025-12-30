@@ -722,7 +722,10 @@ int vfs_write(int id, size_t size, void *buf)
         return -ENOTSUP;
     }
 
-    // TODO: append is not implemented
+    if(file->flags & O_APPEND)
+    {
+        file->seek = file->inode->size;
+    }
 
     status = ops->write(file, size, buf);
     if(status < 0)
@@ -974,8 +977,6 @@ int vfs_open(const char *pathname, int flags)
         }
     }
 
-    // TODO: append is not implemented
-
     fd = fd_create();
     fd->file->flags = flags;
     fd->file->dentry = dp;
@@ -999,6 +1000,11 @@ int vfs_open(const char *pathname, int flags)
             fd_delete(fd);
             return status;
         }
+    }
+
+    if(flags & O_APPEND)
+    {
+        fd->file->seek = ip->size;
     }
 
     dentry_open(dp);

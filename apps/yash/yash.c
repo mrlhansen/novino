@@ -549,23 +549,23 @@ static int execute(int count, args_t *args)
 
         // stdout and stdin via files
 
-        if(cmd->ofs)
+        if(cmd->ofn)
         {
-            fp = fopen(cmd->ofs, "w"); // TODO: "fp" is not being freed here! should we use raw "open" instead?
+            fp = fopen(cmd->ofn, cmd->ofm); // TODO: "fp" is not being freed here! should we use raw "open" instead?
             if(!fp)
             {
-                printf("%s: %s\n", cmd->ofs, strerror(errno));
+                printf("%s: %s\n", cmd->ofn, strerror(errno));
                 break;
             }
             cmd->ofd = fileno(fp);
         }
 
-        if(cmd->ifs)
+        if(cmd->ifn)
         {
-            fp = fopen(cmd->ifs, "r");
+            fp = fopen(cmd->ifn, "r");
             if(!fp)
             {
-                printf("%s: %s\n", cmd->ifs, strerror(errno));
+                printf("%s: %s\n", cmd->ifn, strerror(errno));
                 break;
             }
             cmd->ifd = fileno(fp);

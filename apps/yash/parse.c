@@ -181,22 +181,35 @@ int parse_cmdline(char *str, args_t *args)
 
                 if(expect == 6)
                 {
-                    if(cmd->ofs)
+                    if(cmd->ofn)
                     {
                         return -1;
                     }
-                    cmd->ofs = start;
+                    cmd->ofn = start;
+                    cmd->ofm = "w";
+                    expect = 0;
+                    continue;
+                }
+
+                if(expect == 7)
+                {
+                    if(cmd->ofn)
+                    {
+                        return -1;
+                    }
+                    cmd->ofn = start;
+                    cmd->ofm = "a";
                     expect = 0;
                     continue;
                 }
 
                 if(expect == 8)
                 {
-                    if(cmd->ifs)
+                    if(cmd->ifn)
                     {
                         return -1;
                     }
-                    cmd->ifs = start;
+                    cmd->ifn = start;
                     expect = 0;
                     continue;
                 }
@@ -227,14 +240,14 @@ int parse_cmdline(char *str, args_t *args)
 
         if(sep == 3)
         {
-            if(cmd[i].ofs)
+            if(cmd[i].ofn)
             {
                 return -1;
             }
 
             if(!first)
             {
-                if(cmd[i-1].ofs)
+                if(cmd[i-1].ofn)
                 {
                     return -1;
                 }
@@ -242,7 +255,7 @@ int parse_cmdline(char *str, args_t *args)
 
             if(!last)
             {
-                if(cmd[i+1].ifs)
+                if(cmd[i+1].ifn)
                 {
                     return -1;
                 }

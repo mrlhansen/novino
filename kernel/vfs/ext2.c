@@ -1211,7 +1211,7 @@ static int ext2_inode_expand(ext2_ctx_t *ctx, uint32_t ino, uint32_t goal, bool 
     total = a.dnum - b.dnum;
     start = 0;
 
-    for(int i = count; i < goal; i++)
+    for(int i = b.dnum; i < a.dnum; i++)
     {
         if(ibw.db_count == 0)
         {
