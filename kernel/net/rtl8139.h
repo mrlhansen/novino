@@ -1,6 +1,7 @@
 #pragma once
 
 #include <kernel/pci/pci.h>
+#include <kernel/net/netdev.h>
 
 enum {
     MAC0          = 0x00, // MAC address (6 bytes, write access must be 32-bit aligned)
@@ -84,6 +85,7 @@ typedef struct {
     uint32_t tx_phys[4];
     uint8_t *tx_virt[4];
     uint32_t tx_pos;
+    netdev_t *netdev;
 } rtl8139_t;
 
 void rtl8139_init(pci_dev_t *dev);

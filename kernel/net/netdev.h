@@ -14,10 +14,12 @@ typedef struct {
 struct netdev {
     char name[16];
     uint32_t flags;
-    uint64_t hwaddr;
+    uint32_t mtu;
+    uint64_t mac;
     netdev_ops_t *ops;
     void *data;
     link_t link;
+    list_t ipv4;
 };
 
 int netdev_register(netdev_t *dev);

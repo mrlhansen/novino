@@ -1,18 +1,11 @@
+#include <kernel/net/ethernet.h>
 #include <kernel/net/rtl8139.h>
-#include <kernel/net/netdev.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/x86/irq.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/mmio.h>
 #include <kernel/debug.h>
 #include <string.h>
-
-#define ETH_ALEN       6     // Octets in one ethernet address
-#define ETH_HLEN       14    // Total octets in header
-#define ETH_ZLEN       60    // Minimum octets in frame sans FCS
-#define ETH_DATA_LEN   1500  // Maximum octets in payload
-#define ETH_FRAME_LEN  1514  // Maximum octets in frame sans FCS
-#define ETH_FCS_LEN    4     // Octets in the FCS (Frame Checksum Sequence)
 
 static int rtl8139_transmit(netdev_t *dev, void *data, int size)
 {
@@ -56,7 +49,7 @@ static void rtl8139_receive(rtl8139_t *rtl)
 
         if(flags & ReceiveOK)
         {
-            kp_info("r8139", "packet received, length %d", length);
+            ethernet_rx_packet(rtl->netdev, buf + 4, length);
         }
 
         rtl->rx_pos = ((rtl->rx_pos + length + 7) & -4) % rtl->rx_len;
@@ -174,14 +167,12 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     };
 
     netdev_t *netdev = kzalloc(sizeof(*netdev));
-    if(!netdev)
-    {
-        return;
-    }
+    rtl->netdev = netdev;
 
     strcpy(netdev->name, "eth0");
     netdev->flags = NETDEV_ETHERNET;
-    netdev->hwaddr = mac;
+    netdev->mac = mac;
+    netdev->mtu = 1500;
     netdev->data = rtl;
     netdev->ops = &ops;
 
