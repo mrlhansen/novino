@@ -18,6 +18,14 @@ menuentry "Novino" {
 }
 EOF
 
+# ip link show tap0 &> /dev/null
+# if [ $? -ne 0 ]; then
+#     sudo ip tuntap add mode tap tap0 user ${USER}
+#     sudo ip addr add 10.11.12.1/24 dev tap0
+#     sudo ip link set tap0 up
+#     sudo sysctl -w net.ipv6.conf.tap0.disable_ipv6=1
+# fi
+
 grub-mkrescue -o novino.iso sysroot
 qemu-system-x86_64 -no-reboot -debugcon stdio -cdrom novino.iso -smp 4 -machine q35 \
     -device qemu-xhci,id=xhci \

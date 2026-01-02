@@ -1,16 +1,14 @@
-#include <kernel/pci/pci.h>
-// #include <kernel/ata.h>
 #include <kernel/storage/ahci.h>
+#include <kernel/net/rtl8139.h>
 #include <kernel/usb/pci.h>
 
 static const pci_drv_list_t clist[] = {
-    // {0x01, 0x01, ata_init},
     {0x01, 0x06, ahci_init},
     {0x0C, 0x03, usb_init},
 };
 
 static const pci_drv_list_t dlist[] = {
-    // {0x10ec, 0x8139, rtl8139_init}
+    {0x10ec, 0x8139, rtl8139_init}
 };
 
 void pci_find_driver(pci_dev_t *dev)
