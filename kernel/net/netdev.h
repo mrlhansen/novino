@@ -8,6 +8,10 @@
 typedef struct netdev netdev_t;
 
 typedef struct {
+    uint8_t addr[6];
+} hwaddr_t;
+
+typedef struct {
     int (*transmit)(netdev_t*,void*,int);
 } netdev_ops_t;
 
@@ -15,7 +19,7 @@ struct netdev {
     char name[16];
     uint32_t flags;
     uint32_t mtu;
-    uint64_t mac;
+    hwaddr_t mac;
     netdev_ops_t *ops;
     void *data;
     link_t link;

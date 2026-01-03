@@ -78,7 +78,7 @@ enum {
 
 typedef struct {
     uint32_t ioaddr;
-    uint64_t hwaddr;
+    hwaddr_t hwaddr;
     uint8_t *rx_buf;
     uint32_t rx_len;
     uint32_t rx_pos;

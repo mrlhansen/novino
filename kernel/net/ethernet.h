@@ -9,5 +9,5 @@
 #define ETH_FRAME_LEN  1514  // Maximum octets in frame sans FCS
 #define ETH_FCS_LEN    4     // Octets in the FCS (Frame Check Sequence)
 
-void ethernet_rx_packet(netdev_t *dev, void *frame, int size);
-void ethernet_tx_packet(netdev_t *dev, uint8_t *dstmac, int type, void *payload, int size);
+void ethernet_recv(netdev_t *dev, void *frame, int size);
+void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size);

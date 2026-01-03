@@ -49,7 +49,7 @@ static void rtl8139_receive(rtl8139_t *rtl)
 
         if(flags & ReceiveOK)
         {
-            ethernet_rx_packet(rtl->netdev, buf + 4, length);
+            ethernet_recv(rtl->netdev, buf + 4, length);
         }
 
         rtl->rx_pos = ((rtl->rx_pos + length + 7) & -4) % rtl->rx_len;
@@ -83,15 +83,15 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
 {
     rtl8139_t *rtl;
     uint64_t virt, phys;
-    uint64_t mac = 0;
     uint32_t bits;
+    hwaddr_t mac;
     int status;
     int vector;
 
     // Read MAC address
     for(int i = 0; i < 6; i++)
     {
-        mac = (mac << 8) | inportb(ioaddr + MAC0 + i);
+        mac.addr[i] = inportb(ioaddr + MAC0 + i);
     }
 
     // Power on
@@ -159,7 +159,7 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     outportb(ioaddr + Cmd, bits);
 
     // Logging
-    kp_info("r8139", "iobase: %#x, mac: %lx", ioaddr, mac);
+    kp_info("r8139", "iobase: %#x, hwaddr: %02x:%02x:%02x:%02x:%02x:%02x", ioaddr, mac.addr[0], mac.addr[1], mac.addr[2], mac.addr[3], mac.addr[4], mac.addr[5]);
 
     // Register device
     static netdev_ops_t ops = {

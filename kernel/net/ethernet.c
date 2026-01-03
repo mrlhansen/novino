@@ -4,59 +4,58 @@
 #include <kernel/debug.h>
 #include <string.h>
 
-void ethernet_rx_packet(netdev_t *dev, void *frame, int size)
+void ethernet_recv(netdev_t *dev, void *frame, int size)
 {
-    uint64_t dmac, smac;
     uint16_t type;
     uint8_t *data;
 
     data = frame;
-    dmac = data[0];
-    smac = data[6];
-
-    for(int i = 1; i < 6; i++)
-    {
-        dmac = (dmac << 8) | data[i];
-        smac = (smac << 8) | data[6+i];
-    }
-
     type = data[12];
     type = (type << 8) | data[13];
 
-    if(type == 0x8100) // 802.1q
+    if(type == 0x8100)
     {
-        kp_info("eth", "VLAN tagged packet, ignoring...");
+        // 802.1q tagged
         return;
     }
-    else if(type == 0x0806) // ARP
+    else if(type == 0x0806)
     {
-        arp_rx_packet(dev, frame + ETH_HLEN, size);
+        arp_recv(dev, frame + ETH_HLEN, size);
     }
     else if(type == 0x0800)
     {
-        // ipv4
+        ipv4_recv(dev, frame + ETH_HLEN, size);
+    }
+    else if(type == 0x86DD)
+    {
+        // IPv6
+        return;
     }
 }
 
-void ethernet_tx_packet(netdev_t *dev, uint8_t *dstmac, int type, void *payload, int size) // arp entry instead of dmac?
+void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size)
 {
+    uint8_t *smac, *dmac;
     uint8_t buf[ETH_FRAME_LEN];
 
-    buf[0] = dstmac[0];
-    buf[1] = dstmac[1];
-    buf[2] = dstmac[2];
-    buf[3] = dstmac[3];
-    buf[4] = dstmac[4];
-    buf[5] = dstmac[5];
+    smac = dev->mac.addr;
+    dmac = addr;
 
-    buf[6] = dev->mac >> 40;
-    buf[7] = dev->mac >> 32;
-    buf[8] = dev->mac >> 24;
-    buf[9] = dev->mac >> 16;
-    buf[10] = dev->mac >> 8;
-    buf[11] = dev->mac;
+    buf[0]  = dmac[0];
+    buf[1]  = dmac[1];
+    buf[2]  = dmac[2];
+    buf[3]  = dmac[3];
+    buf[4]  = dmac[4];
+    buf[5]  = dmac[5];
 
-    buf[12] = (type >> 8);
+    buf[6]  = smac[0];
+    buf[7]  = smac[1];
+    buf[8]  = smac[2];
+    buf[9]  = smac[3];
+    buf[10] = smac[4];
+    buf[11] = smac[5];
+
+    buf[12] = type >> 8;
     buf[13] = type;
 
     memcpy(buf + ETH_HLEN, payload, size);
