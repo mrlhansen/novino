@@ -20,11 +20,11 @@ void ethernet_recv(netdev_t *dev, void *frame, int size)
     }
     else if(type == 0x0806)
     {
-        arp_recv(dev, frame + ETH_HLEN, size);
+        arp_recv(dev, frame + ETH_HLEN, size - ETH_HLEN - ETH_FCS_LEN);
     }
     else if(type == 0x0800)
     {
-        ipv4_recv(dev, frame + ETH_HLEN, size);
+        ipv4_recv(dev, frame + ETH_HLEN, size - ETH_HLEN - ETH_FCS_LEN);
     }
     else if(type == 0x86DD)
     {
@@ -33,10 +33,12 @@ void ethernet_recv(netdev_t *dev, void *frame, int size)
     }
 }
 
+static uint8_t buf[ETH_FRAME_LEN]; // make a buffer system for packets
+
 void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size)
 {
     uint8_t *smac, *dmac;
-    uint8_t buf[ETH_FRAME_LEN];
+
 
     smac = dev->mac.addr;
     dmac = addr;
