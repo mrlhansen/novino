@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel/net/ethernet.h>
 #include <kernel/net/netdev.h>
 
 enum {
@@ -36,4 +37,4 @@ arp_t *arp_lookup(uint32_t tpa);
 arp_t *arp_insert(netdev_t *dev, uint32_t tpa, uint8_t *tha);
 
 void arp_send_request(netdev_t *dev, uint32_t spa, uint32_t tpa);
-void arp_recv(netdev_t *dev, void *payload, int size);
+void arp_recv(netdev_t *dev, frame_t *frame);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel/net/ethernet.h>
 #include <kernel/net/netdev.h>
 
 typedef struct {
@@ -20,12 +21,36 @@ typedef struct {
 } ipv4_route_t;
 
 typedef struct {
+    uint32_t saddr;   // Source address
+    uint32_t daddr;   // Destination address
+    uint32_t ident;   // Identification
+    uint32_t proto;   // Protocol
+    uint32_t tally;   // Current size
+    uint32_t total;   // Total size (unknown until last fragment has been received)
+    uint64_t timeout; // Timestamp after which packet is discarded
+    list_t frames;    // List of frames
+    link_t link;      // Link in list of fragments
+} ipv4_fragment_t;
+
+typedef struct {
+    uint32_t saddr;   // Source address
+    uint32_t daddr;   // Destination address
+    uint8_t  proto;   // Protocol
+} ipv4_sdp_t;
+
+typedef struct {
     uint8_t  ihl     : 4;  // Internet header length (in units of 4 bytes)
     uint8_t  version : 4;  // Version (always 4)
     uint8_t  tos;          // Type of service
     uint16_t length;       // Total length (big-endian)
     uint16_t ident;        // Identification (big-endian)
-    uint16_t offset;       // Flags and fragment offset (big-endian)
+    union {
+        uint16_t fragment;
+        struct {
+            uint16_t offset : 13; // Fragment offset (in units of 8 bytes)
+            uint16_t flags  : 3;  // Fragment flags (1 = MF, 2 = DF)
+        };
+    };
     uint8_t  ttl;          // Time to live
     uint8_t  protocol;     // Protocol
     uint16_t checksum;     // Header checksum
@@ -56,5 +81,5 @@ int ipv4_addr_del(netdev_t *dev, ipv4_addr_t *ip);
 
 uint16_t ipv4_checksum(void *data, int len);
 
-void ipv4_send(netdev_t *dev, void *payload);
-void ipv4_recv(netdev_t *dev, void *payload, int size);
+void ipv4_send(void *payload, int size, ipv4_sdp_t *sdp);
+void ipv4_recv(netdev_t *dev, frame_t *frame);

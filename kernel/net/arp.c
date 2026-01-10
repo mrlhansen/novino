@@ -126,9 +126,9 @@ void arp_send_request(netdev_t *dev, uint32_t spa, uint32_t tpa)
     ethernet_send(dev, req.tha, 0x0806, &req, sizeof(req));
 }
 
-void arp_recv(netdev_t *dev, void *payload, int size)
+void arp_recv(netdev_t *dev, frame_t *frame)
 {
-    arp_packet_t *arp = payload;
+    arp_packet_t *arp = frame->l3.data;
     ipv4_addr_t *item = 0;
     uint32_t spa = 0;
     uint32_t tpa = 0;
@@ -170,4 +170,6 @@ void arp_recv(netdev_t *dev, void *payload, int size)
     {
        arp_insert(dev, spa, arp->sha);
     }
+
+    ethernet_free_frame(frame);
 }

@@ -1,17 +1,53 @@
 #include <kernel/net/ethernet.h>
 #include <kernel/net/ipv4.h>
 #include <kernel/net/arp.h>
+#include <kernel/mem/heap.h>
 #include <kernel/debug.h>
 #include <string.h>
 
-void ethernet_recv(netdev_t *dev, void *frame, int size)
+static LIST_INIT(frames, frame_t, link);
+
+frame_t *ethernet_alloc_frame() // TODO: Per device? since MTU can be different
+{
+    frame_t *frame;
+
+    frame = list_pop(&frames);
+    if(frame)
+    {
+        return frame;
+    }
+
+    frame = kzalloc(sizeof(frame_t) + 1516);
+    if(!frame)
+    {
+        return 0; // TODO: this is panic-level bad
+    }
+
+    frame->l2.data = (void*)(frame+1);
+    frame->l3.data = frame->l2.data + ETH_HLEN;
+
+    return frame;
+}
+
+void ethernet_free_frame(frame_t *frame)
+{
+    list_append(&frames, frame);
+}
+
+void ethernet_recv(netdev_t *dev, void *dmaptr, int size)
 {
     uint16_t type;
     uint8_t *data;
+    frame_t *frame;
 
-    data = frame;
+    data = dmaptr;
     type = data[12];
     type = (type << 8) | data[13];
+
+    frame = ethernet_alloc_frame();
+    memcpy(frame->l2.data, dmaptr, size);
+    frame->l2.size = size;
+    frame->l3.size = size - ETH_HLEN - ETH_FCS_LEN;
 
     if(type == 0x8100)
     {
@@ -20,11 +56,11 @@ void ethernet_recv(netdev_t *dev, void *frame, int size)
     }
     else if(type == 0x0806)
     {
-        arp_recv(dev, frame + ETH_HLEN, size - ETH_HLEN - ETH_FCS_LEN);
+        arp_recv(dev, frame);
     }
     else if(type == 0x0800)
     {
-        ipv4_recv(dev, frame + ETH_HLEN, size - ETH_HLEN - ETH_FCS_LEN);
+        ipv4_recv(dev, frame);
     }
     else if(type == 0x86DD)
     {
@@ -38,7 +74,6 @@ static uint8_t buf[ETH_FRAME_LEN]; // make a buffer system for packets
 void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size)
 {
     uint8_t *smac, *dmac;
-
 
     smac = dev->mac.addr;
     dmac = addr;
