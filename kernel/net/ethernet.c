@@ -1,4 +1,6 @@
+#include <kernel/sched/kthreads.h>
 #include <kernel/net/ethernet.h>
+#include <kernel/net/endian.h>
 #include <kernel/net/ipv4.h>
 #include <kernel/net/arp.h>
 #include <kernel/mem/heap.h>
@@ -6,8 +8,12 @@
 #include <string.h>
 
 static LIST_INIT(frames, frame_t, link);
+static LIST_INIT(queue, frame_t, link);
+static thread_t *worker;
 
-frame_t *ethernet_alloc_frame() // TODO: Per device? since MTU can be different
+// TODO: Per device? since MTU can be different
+// We can also make this a function of the device? dev->request_frame
+frame_t *ethernet_request_frame()
 {
     frame_t *frame;
 
@@ -29,72 +35,90 @@ frame_t *ethernet_alloc_frame() // TODO: Per device? since MTU can be different
     return frame;
 }
 
-void ethernet_free_frame(frame_t *frame)
+void ethernet_release_frame(frame_t *frame)
 {
     list_append(&frames, frame);
 }
 
-void ethernet_recv(netdev_t *dev, void *dmaptr, int size)
+void ethernet_recv(netdev_t *dev, void *data, int size)
 {
-    uint16_t type;
-    uint8_t *data;
+    mac_header_t *mhdr;
     frame_t *frame;
 
-    data = dmaptr;
-    type = data[12];
-    type = (type << 8) | data[13];
+    mhdr = data;
+    frame = ethernet_request_frame();
+    memcpy(frame->l2.data, data, size);
 
-    frame = ethernet_alloc_frame();
-    memcpy(frame->l2.data, dmaptr, size);
+    frame->dev = dev;
+    frame->type = swap16(mhdr->type);
     frame->l2.size = size;
     frame->l3.size = size - ETH_HLEN - ETH_FCS_LEN;
 
-    if(type == 0x8100)
+    list_append(&queue, frame);
+
+    if(worker->state == BLOCKING)
     {
-        // 802.1q tagged
-        return;
-    }
-    else if(type == 0x0806)
-    {
-        arp_recv(dev, frame);
-    }
-    else if(type == 0x0800)
-    {
-        ipv4_recv(dev, frame);
-    }
-    else if(type == 0x86DD)
-    {
-        // IPv6
-        return;
+        thread_unblock(worker);
     }
 }
 
-static uint8_t buf[ETH_FRAME_LEN]; // make a buffer system for packets
-
-void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size)
+void ethernet_send(netdev_t *dev, uint8_t *dmac, int type, frame_t *frame) // frame contains type and dev!
 {
-    uint8_t *smac, *dmac;
+    mac_header_t *mhdr;
+    uint8_t *smac;
 
     smac = dev->mac.addr;
-    dmac = addr;
+    mhdr = frame->l2.data;
+    mhdr->type = swap16(type);
 
-    buf[0]  = dmac[0];
-    buf[1]  = dmac[1];
-    buf[2]  = dmac[2];
-    buf[3]  = dmac[3];
-    buf[4]  = dmac[4];
-    buf[5]  = dmac[5];
+    mhdr->dmac[0] = dmac[0];
+    mhdr->dmac[1] = dmac[1];
+    mhdr->dmac[2] = dmac[2];
+    mhdr->dmac[3] = dmac[3];
+    mhdr->dmac[4] = dmac[4];
+    mhdr->dmac[5] = dmac[5];
 
-    buf[6]  = smac[0];
-    buf[7]  = smac[1];
-    buf[8]  = smac[2];
-    buf[9]  = smac[3];
-    buf[10] = smac[4];
-    buf[11] = smac[5];
+    mhdr->smac[0] = smac[0];
+    mhdr->smac[1] = smac[1];
+    mhdr->smac[2] = smac[2];
+    mhdr->smac[3] = smac[3];
+    mhdr->smac[4] = smac[4];
+    mhdr->smac[5] = smac[5];
 
-    buf[12] = type >> 8;
-    buf[13] = type;
+    dev->ops->transmit(dev, mhdr, frame->l3.size + ETH_HLEN);
+}
 
-    memcpy(buf + ETH_HLEN, payload, size);
-    dev->ops->transmit(dev, buf, size + ETH_HLEN);
+static void ethernet_worker()
+{
+    frame_t *frame;
+
+    while(1)
+    {
+        frame = list_pop(&queue);
+        if(!frame)
+        {
+            thread_block(0);
+            continue;
+        }
+
+        switch(frame->type)
+        {
+            case 0x0806:
+                arp_recv(frame->dev, frame);
+                break;
+            case 0x0800:
+                ipv4_recv(frame->dev, frame);
+                break;
+            default:
+                kp_info("net", "unknown ethertype %x", frame->type);
+                ethernet_release_frame(frame);
+                break;
+        }
+    }
+}
+
+void ethernet_init()
+{
+    worker = kthreads_create("net", ethernet_worker, 0, TPR_SRT);
+    kthreads_run(worker);
 }

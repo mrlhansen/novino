@@ -42,8 +42,8 @@ typedef struct {
     uint8_t  ihl     : 4;  // Internet header length (in units of 4 bytes)
     uint8_t  version : 4;  // Version (always 4)
     uint8_t  tos;          // Type of service
-    uint16_t length;       // Total length (big-endian)
-    uint16_t ident;        // Identification (big-endian)
+    uint16_t length;       // Total length
+    uint16_t ident;        // Identification
     union {
         uint16_t fragment;
         struct {
@@ -54,8 +54,8 @@ typedef struct {
     uint8_t  ttl;          // Time to live
     uint8_t  protocol;     // Protocol
     uint16_t checksum;     // Header checksum
-    uint32_t saddr;        // Source address (big-endian)
-    uint32_t daddr;        // Destination address (big-endian)
+    uint32_t saddr;        // Source address
+    uint32_t daddr;        // Destination address
 } __attribute__((packed)) ipv4_header_t;
 
 enum {

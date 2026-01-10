@@ -125,7 +125,7 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     outportw(ioaddr + IntrMask, bits);
 
     // Configure Rx
-    bits = (AcceptMatch | AcceptBroadcast | AcceptMulticast | Wrap | RxBufLen8k);
+    bits = (AcceptMatch | AcceptBroadcast | Wrap | RxBufLen8k);
     outportl(ioaddr + RxConfig, bits);
 
     // Save information

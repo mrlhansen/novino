@@ -26,6 +26,7 @@
 #include <kernel/pci/pci.h>
 #include <kernel/vfs/initrd.h>
 #include <kernel/vfs/vfs.h>
+#include <kernel/net/ethernet.h>
 #include <kernel/debug.h>
 #include <string.h>
 #include <stdio.h>
@@ -168,6 +169,7 @@ void kmain(bootstruct_t *bs)
     // Subsystems
     input_init();
     term_init();
+    ethernet_init();
 
     // PCI
     pci_init();

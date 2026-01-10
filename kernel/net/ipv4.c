@@ -84,7 +84,7 @@ static void *ipv4_fragment_assemble(ipv4_fragment_t *fragment)
     {
         h = item->l3.data;
         memcpy(data + 8 * h->offset, item->l4.data, item->l4.size);
-        ethernet_free_frame(item);
+        ethernet_release_frame(item);
     }
 
     list_remove(&fragments, fragment);
@@ -218,8 +218,8 @@ void ipv4_send(void *payload, int size, ipv4_sdp_t *sdp)
         return;
     }
 
-    f = ethernet_alloc_frame();
-    h = f->l2.data;
+    f = ethernet_request_frame();
+    h = f->l3.data;
     s = sizeof(ipv4_header_t);
 
     if(!sdp->saddr)
@@ -246,20 +246,21 @@ void ipv4_send(void *payload, int size, ipv4_sdp_t *sdp)
         length = (size > mtu) ? mtu : size;
         size = size - length;
 
+        f->l3.size  = length + s;
         h->flags    = size ? 1 : 0;
         h->offset   = offset / 8;
         h->fragment = swap16(h->fragment);
-        h->length   = swap16(length + s);
+        h->length   = swap16(f->l3.size);
         h->checksum = 0;
         h->checksum = ipv4_checksum(h, s);
 
         memcpy(h+1, payload + offset, length);
-        ethernet_send(arp->dev, arp->mac.addr, 0x0800, h, length + s); // maybe this should simply take a frame_t as input?
+        ethernet_send(arp->dev, arp->mac.addr, 0x0800, f);
 
         offset = offset + length;
     }
 
-    ethernet_free_frame(f);
+    ethernet_release_frame(f);
 }
 
 void ipv4_recv(netdev_t *dev, frame_t *frame)
@@ -333,5 +334,5 @@ void ipv4_recv(netdev_t *dev, frame_t *frame)
         return;
     }
 
-    ethernet_free_frame(frame);
+    ethernet_release_frame(frame);
 }

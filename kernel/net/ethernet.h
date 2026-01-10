@@ -15,14 +15,24 @@ typedef struct {
 } layer_t;
 
 typedef struct {
+    int type;
     layer_t l2;
     layer_t l3;
     layer_t l4;
+    netdev_t *dev;
     link_t link;
 } frame_t;
 
-frame_t *ethernet_alloc_frame();
-void ethernet_free_frame(frame_t *frame);
+typedef struct {
+    uint8_t dmac[6];
+    uint8_t smac[6];
+    uint16_t type;
+} mac_header_t;
+
+frame_t *ethernet_request_frame();
+void ethernet_release_frame(frame_t *frame);
 
 void ethernet_recv(netdev_t *dev, void *frame, int size);
-void ethernet_send(netdev_t *dev, uint8_t *addr, int type, void *payload, int size);
+void ethernet_send(netdev_t *dev, uint8_t *dmac, int type, frame_t *frame);
+
+void ethernet_init();

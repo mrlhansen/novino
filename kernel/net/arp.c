@@ -58,12 +58,14 @@ arp_t *arp_insert(netdev_t *dev, uint32_t tpa, uint8_t *tha)
     return item;
 }
 
-static void arp_send_reply(netdev_t *dev, arp_packet_t *req)
+static void arp_send_reply(netdev_t *dev, frame_t *frame)
 {
+    arp_packet_t *req;
     uint8_t *sha;
     uint8_t tmp;
 
     sha = dev->mac.addr;
+    req = frame->l3.data;
     req->oper = ARP_REPLY;
 
     for(int i = 0; i < 4; i++)
@@ -87,43 +89,50 @@ static void arp_send_reply(netdev_t *dev, arp_packet_t *req)
     req->sha[4] = sha[4];
     req->sha[5] = sha[5];
 
-    ethernet_send(dev, req->tha, 0x0806, req, sizeof(*req));
+    ethernet_send(dev, req->tha, 0x0806, frame);
 }
 
 void arp_send_request(netdev_t *dev, uint32_t spa, uint32_t tpa)
 {
-    arp_packet_t req = {
-        .htype = ARP_HTYPE_ETHERNET,
-        .hlen  = 6,
-        .ptype = ARP_PTYPE_IPV4,
-        .plen  = 4,
-        .oper  = ARP_REQUEST,
-        .tha[0] = 0xFF,
-        .tha[1] = 0xFF,
-        .tha[2] = 0xFF,
-        .tha[3] = 0xFF,
-        .tha[4] = 0xFF,
-        .tha[5] = 0xFF,
-    };
+    arp_packet_t *req;
+    frame_t *frame;
 
-    req.spa[0] = spa >> 24;
-    req.spa[1] = spa >> 16;
-    req.spa[2] = spa >> 8;
-    req.spa[3] = spa;
+    frame = ethernet_request_frame();
+    frame->l3.size = sizeof(arp_packet_t);
+    req = frame->l3.data;
 
-    req.tpa[0] = tpa >> 24;
-    req.tpa[1] = tpa >> 16;
-    req.tpa[2] = tpa >> 8;
-    req.tpa[3] = tpa;
+    req->htype = ARP_HTYPE_ETHERNET;
+    req->hlen  = 6;
+    req->ptype = ARP_PTYPE_IPV4;
+    req->plen  = 4;
+    req->oper  = ARP_REQUEST;
 
-    req.sha[0] = dev->mac.addr[0];
-    req.sha[1] = dev->mac.addr[1];
-    req.sha[2] = dev->mac.addr[2];
-    req.sha[3] = dev->mac.addr[3];
-    req.sha[4] = dev->mac.addr[4];
-    req.sha[5] = dev->mac.addr[5];
+    req->spa[0] = spa >> 24;
+    req->spa[1] = spa >> 16;
+    req->spa[2] = spa >> 8;
+    req->spa[3] = spa;
 
-    ethernet_send(dev, req.tha, 0x0806, &req, sizeof(req));
+    req->tpa[0] = tpa >> 24;
+    req->tpa[1] = tpa >> 16;
+    req->tpa[2] = tpa >> 8;
+    req->tpa[3] = tpa;
+
+    req->sha[0] = dev->mac.addr[0];
+    req->sha[1] = dev->mac.addr[1];
+    req->sha[2] = dev->mac.addr[2];
+    req->sha[3] = dev->mac.addr[3];
+    req->sha[4] = dev->mac.addr[4];
+    req->sha[5] = dev->mac.addr[5];
+
+    req->tha[0] = 0xFF;
+    req->tha[1] = 0xFF;
+    req->tha[2] = 0xFF;
+    req->tha[3] = 0xFF;
+    req->tha[4] = 0xFF;
+    req->tha[5] = 0xFF;
+
+    ethernet_send(dev, req->tha, 0x0806, frame);
+    ethernet_release_frame(frame);
 }
 
 void arp_recv(netdev_t *dev, frame_t *frame)
@@ -163,7 +172,7 @@ void arp_recv(netdev_t *dev, frame_t *frame)
 
         if(item)
         {
-            arp_send_reply(dev, arp);
+            arp_send_reply(dev, frame);
         }
     }
     else if(arp->oper == ARP_REPLY)
@@ -171,5 +180,5 @@ void arp_recv(netdev_t *dev, frame_t *frame)
        arp_insert(dev, spa, arp->sha);
     }
 
-    ethernet_free_frame(frame);
+    ethernet_release_frame(frame);
 }
