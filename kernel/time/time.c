@@ -53,13 +53,19 @@ int gettime(timeval_t *tv)
 void timer_wait()
 {
     uint64_t current = ticks;
-    while(current == ticks);
+    while(current == ticks)
+    {
+        asm("pause");
+    }
 }
 
 void timer_sleep(uint64_t ms)
 {
     ms += ticks;
-    while(ticks < ms);
+    while(ticks < ms)
+    {
+        asm("pause");
+    }
 }
 
 void time_init()

@@ -59,7 +59,6 @@ static void rtl8139_receive(rtl8139_t *rtl)
 
 static void rtl8139_handler(int vector, void *data)
 {
-    uint16_t summary;
     uint16_t status;
     rtl8139_t *rtl;
 
@@ -74,8 +73,7 @@ static void rtl8139_handler(int vector, void *data)
 
     if(status & TxOK)
     {
-        summary = inportw(rtl->ioaddr + TxSummary);
-        kp_info("r8139", "packet transmitted, summary %x", summary);
+        // inportw(rtl->ioaddr + TxSummary);
     }
 }
 

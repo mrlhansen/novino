@@ -26,6 +26,7 @@ enum {
     I_STREAM   = 0x08, // Stream device
     I_SYMLINK  = 0x10, // Symbolic link
     I_PIPE     = 0x20, // Anonymous pipe
+    I_SOCKET   = 0x40, // Network socket
 };
 
 // Seeking

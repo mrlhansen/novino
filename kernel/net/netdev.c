@@ -4,6 +4,8 @@
 #include <kernel/errno.h>
 #include <string.h>
 
+#include <kernel/net/arp.h>
+
 static LIST_INIT(devices, netdev_t, link);
 
 // This file handles anything that has to do with the physical hardware
@@ -24,6 +26,15 @@ int netdev_register(netdev_t *dev)
         .prefix = 24,
     };
     list_append(&dev->ipv4, &ip);
+    static ipv4_route_t rt = {
+        .subnet = 0x0a0b0c00,
+        .prefix = 24,
+        .mask = 0xffffff00,
+        .nexthop = 0,
+        .source = 0x0a0b0c02,
+    };
+    rt.dev = dev;
+    ipv4_add_route(&rt);
     // tmp hack end
 
     return 0;

@@ -32,7 +32,7 @@ typedef struct {
 frame_t *ethernet_request_frame();
 void ethernet_release_frame(frame_t *frame);
 
-void ethernet_recv(netdev_t *dev, void *frame, int size);
+void ethernet_recv(netdev_t *dev, void *data, int size);
 void ethernet_send(netdev_t *dev, uint8_t *dmac, int type, frame_t *frame);
 
 void ethernet_init();

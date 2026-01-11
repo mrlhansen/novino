@@ -2,6 +2,7 @@
 
 #include <kernel/net/ethernet.h>
 #include <kernel/net/netdev.h>
+#include <kernel/net/arp.h>
 
 typedef struct {
     uint32_t address; // Address
@@ -73,8 +74,9 @@ typedef struct {
     uint32_t rest;      // Rest of header, depending on type
 } __attribute__((packed)) icmpv4_header_t;
 
-int ipv4_route_add(netdev_t *dev, ipv4_route_t *route);
-ipv4_route_t *ipv4_route_find(uint32_t address);
+int ipv4_add_route(ipv4_route_t *route);
+ipv4_route_t *ipv4_find_route(uint32_t address);
+arp_t *ipv4_find_nexthop(uint32_t address);
 
 int ipv4_addr_add(netdev_t *dev, ipv4_addr_t *ip);
 int ipv4_addr_del(netdev_t *dev, ipv4_addr_t *ip);

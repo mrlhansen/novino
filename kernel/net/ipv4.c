@@ -1,17 +1,16 @@
 #include <kernel/net/ethernet.h>
 #include <kernel/net/endian.h>
+#include <kernel/net/socket.h>
 #include <kernel/net/ipv4.h>
 #include <kernel/net/arp.h>
 #include <kernel/mem/heap.h>
+#include <kernel/time/time.h>
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 #include <string.h>
 
 static LIST_INIT(routes, ipv4_route_t, link);
 static LIST_INIT(fragments, ipv4_fragment_t, link);
-
-// the ethernet_recv() function should just add frames to the queue
-// a separate thread will then process frames in the queue
 
 static ipv4_fragment_t *ipv4_fragment_cache(frame_t *frame)
 {
@@ -66,7 +65,6 @@ static ipv4_fragment_t *ipv4_fragment_cache(frame_t *frame)
 
     if(item->tally == item->total)
     {
-        kp_info("ipv4", "we have all fragments!");
         return item;
     }
 
@@ -120,6 +118,7 @@ uint16_t ipv4_checksum(void *data, int len)
 int ipv4_addr_add(netdev_t *dev, ipv4_addr_t *ip)
 {
     // check for conflicts
+    // decide if this should add an automatic route!
     list_append(&dev->ipv4, ip);
     return 0;
 }
@@ -127,18 +126,19 @@ int ipv4_addr_add(netdev_t *dev, ipv4_addr_t *ip)
 int ipv4_addr_del(netdev_t *dev, ipv4_addr_t *ip)
 {
     // check for conflicts
+    // decide if this should remove an automatic route!
     list_remove(&dev->ipv4, ip);
     return 0;
 }
 
-int ipv4_route_add(netdev_t *dev, ipv4_route_t *route)
+int ipv4_add_route(ipv4_route_t *route)
 {
     // check for conflicts
 	list_append(&routes, route);
 	return 0;
 }
 
-ipv4_route_t *ipv4_route_find(uint32_t address)
+ipv4_route_t *ipv4_find_route(uint32_t address)
 {
 	ipv4_route_t *item = 0;
     ipv4_route_t *route = 0;
@@ -169,6 +169,36 @@ ipv4_route_t *ipv4_route_find(uint32_t address)
     }
 
 	return route;
+}
+
+arp_t *ipv4_find_nexthop(uint32_t address)
+{
+    ipv4_route_t *rt;
+    ipv4_addr_t *ip;
+    arp_t *arp;
+
+    rt = ipv4_find_route(address);
+    if(!rt)
+    {
+        return 0;
+    }
+
+    if(rt->nexthop)
+    {
+        address = rt->nexthop;
+    }
+
+    arp = arp_lookup(address);
+    if(!arp)
+    {
+        ip = rt->dev->ipv4.head;
+        arp_send_request(rt->dev, ip->address, address);
+        timer_sleep(50); // need something better than this!
+        arp = arp_lookup(address);
+    }
+
+    return arp;
+
 }
 
 void icmpv4_recv(void *payload, int size, ipv4_sdp_t *sdp)
@@ -211,7 +241,7 @@ void ipv4_send(void *payload, int size, ipv4_sdp_t *sdp)
     int mtu;
     int s;
 
-    arp = arp_lookup(sdp->daddr);
+    arp = ipv4_find_nexthop(sdp->daddr);
     if(!arp)
     {
         kp_error("ipv4", "arp lookup failed");
@@ -314,16 +344,17 @@ void ipv4_recv(netdev_t *dev, frame_t *frame)
         p = frame->l4.data;
     }
 
-    if(h->protocol == 1)
+    if(sdp.proto== 1)
     {
         // ICMP
+        socket_inet4_recv(SOCK_RAW, PROTO_ICMP, p, s, &sdp);
         icmpv4_recv(p, s, &sdp);
     }
-    else if(h->protocol == 6)
+    else if(sdp.proto == 6)
     {
         // TCP
     }
-    else if(h->protocol == 17)
+    else if(sdp.proto == 17)
     {
         // UDP
     }
