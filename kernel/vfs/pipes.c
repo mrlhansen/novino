@@ -3,26 +3,6 @@
 #include <kernel/errno.h>
 #include <kernel/debug.h>
 
-// make all of this into a channel/stream instead
-
-static inline void wake(pipe_io_t *io)
-{
-    acquire_lock(&io->lock);
-    if(io->thread)
-    {
-        thread_unblock(io->thread);
-        io->thread = 0;
-    }
-    release_lock(&io->lock);
-}
-
-static inline void sleep(pipe_io_t *io)
-{
-    acquire_lock(&io->lock);
-    io->thread = thread_handle();
-    thread_block(&io->lock);
-}
-
 pipe_t *pipe_create(int rflags, int wflags)
 {
     pipe_t *pipe;
@@ -38,6 +18,9 @@ pipe_t *pipe_create(int rflags, int wflags)
     pipe->wr.mutex = create_mutex();
     pipe->wr.flags = wflags;
 
+    wq_init(&pipe->rd.queue);
+    wq_init(&pipe->wr.queue);
+
     return pipe;
 }
 
@@ -46,12 +29,12 @@ int pipe_delete(pipe_t *pipe)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
 
-    if(rd->lock || rd->thread)
+    if(wq_size(&rd->queue) > 0)
     {
         return -EBUSY;
     }
 
-    if(wr->lock || wr->thread)
+    if(wq_size(&wr->queue) > 0)
     {
         return -EBUSY;
     }
@@ -100,8 +83,8 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
             {
                 break;
             }
-            wake(rd);
-            sleep(wr);
+            wq_wake(&rd->queue);
+            wq_wait(&wr->queue);
         }
 
         pipe->data[pipe->head] = *buf++;
@@ -109,7 +92,7 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
         length++;
     }
 
-    wake(rd);
+    wq_wake(&rd->queue);
     release_mutex(wr->mutex);
 
     return length;
@@ -139,7 +122,7 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
             release_mutex(rd->mutex);
             return 0;
         }
-        sleep(rd);
+        wq_wait(&rd->queue);
     }
 
     // Read from buffer
@@ -158,7 +141,7 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
         length++;
     }
 
-    wake(wr);
+    wq_wake(&wr->queue);
     release_mutex(rd->mutex);
 
     return length;

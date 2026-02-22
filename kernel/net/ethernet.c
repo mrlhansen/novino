@@ -10,6 +10,7 @@
 static LIST_INIT(frames, frame_t, link);
 static LIST_INIT(queue, frame_t, link);
 static thread_t *worker;
+static wq_t wq;
 
 // TODO: Per device? since MTU can be different
 // We can also make this a function of the device? dev->request_frame
@@ -55,11 +56,7 @@ void ethernet_recv(netdev_t *dev, void *data, int size)
     frame->l3.size = size - ETH_HLEN - ETH_FCS_LEN;
 
     list_append(&queue, frame);
-
-    if(worker->state == BLOCKING)
-    {
-        thread_unblock(worker);
-    }
+    wq_wake(&wq);
 }
 
 void ethernet_send(netdev_t *dev, uint8_t *dmac, int type, frame_t *frame) // frame contains type and dev!
@@ -97,7 +94,7 @@ static void ethernet_worker()
         frame = list_pop(&queue);
         if(!frame)
         {
-            thread_block(0);
+            wq_wait(&wq);
             continue;
         }
 
@@ -119,6 +116,7 @@ static void ethernet_worker()
 
 void ethernet_init()
 {
+    wq_init(&wq);
     worker = kthreads_create("net", ethernet_worker, 0, TPR_SRT);
     kthreads_run(worker);
 }

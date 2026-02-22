@@ -21,8 +21,10 @@ struct process {
     link_t sibling;       // Link in child processes
     link_t plink;         // Link in global processes
     list_t mmap;          // List of memory maps
+    spinlock_t lock;      // Lock for this struct
+    wq_t wait;            // List for threads in wait() calls
     struct {
-        uint32_t next;    // Next file descriptor ID
+        size_t next;      // Next file descriptor ID
         list_t list;      // List of open file descriptors
     } fd;
     struct {
@@ -30,11 +32,6 @@ struct process {
         size_t end;       // Data segment end
         size_t max;       // Data segment max
     } brk;
-    struct {
-        spinlock_t lock;  // Lock for this struct
-        pid_t pid;        // Child pid we are waiting for
-        thread_t *thread; // Thread currently waiting
-    } wait;
 };
 
 void process_exit(int status);

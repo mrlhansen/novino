@@ -6,7 +6,6 @@
 #include <string.h>
 
 static LIST_INIT(dead, thread_t, slink);
-static LIST_INIT(hold, thread_t, slink);
 
 thread_t *thread_create(const char *name, void *entry, void *arg0, void *arg1, void *arg2)
 {
@@ -103,32 +102,6 @@ thread_t *thread_handle()
     return scheduler_get_thread();
 }
 
-void thread_block(spinlock_t *lock)
-{
-    thread_t *thread;
-    scheduler_stop();
-
-    thread = thread_handle();
-    thread->lock = lock;
-    thread->state = BLOCKING;
-    list_append(&hold, thread);
-
-    scheduler_yield();
-}
-
-void thread_unblock(thread_t *thread)
-{
-    scheduler_mask();
-
-    if(list_remove(&hold, thread) == 0)
-    {
-        thread->state = READY;
-        scheduler_append(thread);
-    }
-
-    scheduler_unmask();
-}
-
 void thread_signal(thread_t *thread)
 {
     spinlock_t *lock;
@@ -151,7 +124,6 @@ void thread_signal(thread_t *thread)
             asm("pause");
         }
 
-        list_remove(&hold, thread);
         thread->state = READY;
         scheduler_append(thread);
     }
@@ -183,7 +155,6 @@ void thread_wait()
         thread->yield = 1;
         thread->sig.wait = 1;
         thread->state = BLOCKING;
-        list_append(&hold, thread);
     }
 
     release_lock(lock);

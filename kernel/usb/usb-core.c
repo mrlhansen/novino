@@ -260,7 +260,7 @@ void usb_core_hub_detach(usb_hub_t *hub)
 
     // Exit worker thread
     hub->wrk.detach = 1;
-    thread_unblock(hub->wrk.thread);
+    thread_signal(hub->wrk.thread);
 }
 
 void usb_core_hub_attach(usb_hub_t *ptr)

@@ -86,9 +86,6 @@ int thread_state(thread_t *t)
         case 3:
             st = 'B';
             break;
-        case 4:
-            st = 'W';
-            break;
         case 5:
             st = 'T';
             break;

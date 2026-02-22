@@ -2,6 +2,7 @@
 
 #include <kernel/sched/process.h>
 #include <kernel/sched/mutex.h>
+#include <kernel/sched/wq.h>
 #include <kernel/lists.h>
 
 #define PIPE_BUFFER_SIZE (4*1024+1)
@@ -9,8 +10,7 @@
 typedef struct {
     uint32_t flags;
     mutex_t *mutex;
-    spinlock_t lock;
-    thread_t *thread;
+    wq_t queue;
 } pipe_io_t;
 
 typedef struct {

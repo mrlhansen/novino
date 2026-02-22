@@ -1,11 +1,11 @@
 #pragma once
 
-#include <kernel/lists.h>
+#include <kernel/sched/wq.h>
 
 typedef struct {
     spinlock_t lock;
-    uint32_t free;
-    list_t list;
+    wq_t queue;
+    bool free;
 } mutex_t;
 
 int free_mutex(mutex_t *mutex);

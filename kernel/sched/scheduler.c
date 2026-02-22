@@ -258,13 +258,11 @@ uint64_t schedule_handler(uint64_t rsp)
             thread->state = READY;
             scheduler_append(thread);
         }
-        else if(thread->state == BLOCKING)
+
+        if(thread->lock)
         {
-            if(thread->lock)
-            {
-                release_lock(thread->lock);
-                thread->lock = 0;
-            }
+            release_lock(thread->lock);
+            thread->lock = 0;
         }
 
         thread->yield = 0;

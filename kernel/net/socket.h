@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel/sched/threads.h>
+#include <kernel/sched/wq.h>
 #include <kernel/net/ipv4.h>
 #include <kernel/lists.h>
 
@@ -23,8 +23,7 @@ typedef struct {
     int proto;
     link_t link;
     list_t list;
-    spinlock_t lock;
-    thread_t *thread;
+    wq_t wait;
 } socket_t;
 
 typedef struct { // TODO: once we support other things, this should be made into a sort of union

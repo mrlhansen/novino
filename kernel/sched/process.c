@@ -43,7 +43,7 @@ pid_t process_wait(pid_t pid, int *status)
     self = process_handle();
     found = 0;
 
-    acquire_lock(&self->wait.lock);
+    acquire_lock(&self->lock);
 
     child = self->children.head;
     while(child)
@@ -64,14 +64,18 @@ pid_t process_wait(pid_t pid, int *status)
         child = child->sibling.next;
     }
 
-    release_lock(&self->wait.lock);
+    if(child)
+    {
+        list_remove(&self->children, child);
+    }
+
+    release_lock(&self->lock);
 
     if(child)
     {
         *status  = child->exitcode;
         pid = child->pid;
 
-        list_remove(&self->children, child);
         list_remove(&active, child);
         list_append(&reaped, child);
 
@@ -84,10 +88,7 @@ pid_t process_wait(pid_t pid, int *status)
     }
 
     // wait for child
-    acquire_lock(&self->wait.lock);
-    self->wait.thread = thread_handle();
-    self->wait.pid = pid;
-    thread_block(&self->wait.lock);
+    wq_wait(&self->wait);
 
     // try again after unblock
     return process_wait(pid, status);
@@ -98,7 +99,6 @@ void process_exit(int status)
     process_t *self;
     process_t *child;
     process_t *parent;
-    thread_t *thread;
     fd_t *fd;
 
     // TODO: we assume that the process only has a single running thread when process_exit is called
@@ -125,28 +125,11 @@ void process_exit(int status)
         list_append(&parent->children, child);
     }
 
-    // notify parent
-    acquire_lock(&parent->wait.lock);
-
-    thread = 0;
     self->exitcode = status;
     self->state = TERMINATED;
 
-    if(parent->wait.thread)
-    {
-        if(parent->wait.pid == 0 || parent->wait.pid == self->pid)
-        {
-            thread = parent->wait.thread;
-            parent->wait.thread = 0;
-        }
-    }
-
-    release_lock(&parent->wait.lock);
-
-    if(thread)
-    {
-        thread_unblock(thread);
-    }
+    // wake parents
+    wq_wake(&parent->wait);
 
     // exit thread
     thread_exit();
@@ -188,6 +171,7 @@ process_t *process_create(const char *name, uint64_t pml4, process_t *parent)
     list_init(&process->children, offsetof(process_t, sibling));
     list_init(&process->threads, offsetof(thread_t, plink));
     list_init(&process->fd.list, offsetof(fd_t, link));
+    wq_init(&process->wait);
 
     // Handle parent
     if(parent)

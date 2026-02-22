@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel/sched/wq.h>
 #include <kernel/lists.h>
 
 #define STACK_SIZE 4096
@@ -13,7 +14,6 @@ typedef enum {
     RUNNING,
     SLEEPING,
     BLOCKING,
-    WAITING,
     TERMINATED
 } state_t;
 
@@ -38,7 +38,8 @@ struct thread {
     process_t *parent;          // Parent process
     link_t plink;               // Link for threads in parent process
     link_t slink;               // Link for threads in scheduler queue
-    link_t mlink;               // Link for threads in mutex queue
+    link_t wlink;               // Link for threads in wait queue
+    wq_t *wq;                   // Current wait queue
     spinlock_t *lock;           // Optional lock used for safe thread blocking
     yield_t yield;              // Thread is currently yielding
     struct {                    // Used for IRQ signals
@@ -51,9 +52,6 @@ struct thread {
         uint64_t ursp;          // User RSP
     } gs;
 };
-
-void thread_block(spinlock_t*);
-void thread_unblock(thread_t*);
 
 void thread_wait();
 void thread_signal(thread_t*);

@@ -86,7 +86,9 @@ int socket_open(int domain, int type, int proto)
     sk->domain = domain;
     sk->type = type;
     sk->proto = proto;
+
     list_init(&sk->list, offsetof(socket_data_t, link));
+    wq_init(&sk->wait);
 
     if(domain == AF_INET4)
     {
@@ -129,13 +131,7 @@ void socket_inet4_recv(int type, int proto, void *data, int size, ipv4_sdp_t *sd
 
         // we could accumulate size of the socket data and have an upper limit
 
-        acquire_lock(&item->lock);
-        if(item->thread)
-        {
-            thread_unblock(item->thread);
-            item->thread = 0;
-        }
-        release_lock(&item->lock);
+        wq_wake_one(&item->wait);
     }
 }
 
@@ -163,9 +159,7 @@ int socket_read(int id, void *data, size_t size, int flags, socket_addr_t *addr)
 
     if(!chunk)
     {
-        acquire_lock(&sk->lock);
-        sk->thread = thread_handle();
-        thread_block(&sk->lock);
+        wq_wait(&sk->wait);
         chunk = list_head(&sk->list);
     }
 
