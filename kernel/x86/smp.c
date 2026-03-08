@@ -1,3 +1,4 @@
+#include <kernel/syscalls/syscalls.h>
 #include <kernel/sched/scheduler.h>
 #include <kernel/acpi/acpi.h>
 #include <kernel/time/time.h>

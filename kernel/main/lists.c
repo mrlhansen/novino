@@ -119,42 +119,42 @@ void list_append(list_t *list, void *item)
     release_lock(&list->lock);
 }
 
-int list_remove(list_t *list, void *item)
+bool list_remove(list_t *list, void *item)
 {
     link_t *link = item + list->offset;
     link_t *temp;
-    int status;
+    bool status;
 
-    status = -EFAIL;
+    status = false;
     acquire_lock(&list->lock);
 
     if(list->head == item)
     {
         list->head = link->next;
-        status = 0;
+        status = true;
     }
 
     if(list->tail == item)
     {
         list->tail = link->prev;
-        status = 0;
+        status = true;
     }
 
     if(link->prev)
     {
         temp = link->prev + list->offset;
         temp->next = link->next;
-        status = 0;
+        status = true;
     }
 
     if(link->next)
     {
         temp = link->next + list->offset;
         temp->prev = link->prev;
-        status = 0;
+        status = true;
     }
 
-    if(status == 0)
+    if(status)
     {
         link->prev = 0;
         link->next = 0;

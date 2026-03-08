@@ -2,8 +2,6 @@
 #include <kernel/sched/threads.h>
 #include <kernel/sched/wq.h>
 
-#include <kernel/debug.h>
-
 void wq_init(wq_t *wq)
 {
     wq->lock = 0;
@@ -108,4 +106,29 @@ int wq_wake_one(wq_t *wq)
 int wq_size(wq_t *wq)
 {
     return wq->list.length;
+}
+
+void wq_interrupt(thread_t *thread)
+{
+    wq_t *wq;
+    bool ok;
+
+    wq = thread->wq;
+    if(!wq)
+    {
+        return;
+    }
+
+    wq_lock(wq);
+
+    ok = list_remove(&wq->list, thread);
+    if(ok)
+    {
+        thread->state = READY;
+        thread->wq = 0;
+        // TODO: set a flag?
+        scheduler_append(thread);
+    }
+
+    wq_unlock(wq);
 }

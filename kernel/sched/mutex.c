@@ -1,5 +1,6 @@
-#include <kernel/sched/scheduler.h>
+#include <kernel/sched/threads.h>
 #include <kernel/sched/mutex.h>
+#include <kernel/sched/wq.h>
 #include <kernel/mem/heap.h>
 #include <kernel/errno.h>
 #include <kernel/lists.h>
@@ -34,7 +35,6 @@ int free_mutex(mutex_t *mutex)
 bool acquire_mutex(mutex_t *mutex, bool nonblock)
 {
     thread_t *thread;
-    uint32_t flags;
     bool status;
 
     thread = thread_handle();

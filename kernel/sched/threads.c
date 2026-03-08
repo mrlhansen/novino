@@ -1,5 +1,5 @@
 #include <kernel/sched/scheduler.h>
-#include <kernel/sched/threads.h>
+#include <kernel/sched/process.h>
 #include <kernel/mem/heap.h>
 #include <kernel/x86/smp.h>
 #include <kernel/x86/fpu.h>

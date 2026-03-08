@@ -1,4 +1,5 @@
 #include <kernel/sched/kthreads.h>
+#include <kernel/sched/wq.h>
 #include <kernel/net/ethernet.h>
 #include <kernel/net/endian.h>
 #include <kernel/net/ipv4.h>

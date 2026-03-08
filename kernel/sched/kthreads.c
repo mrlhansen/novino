@@ -1,5 +1,6 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/kthreads.h>
+#include <kernel/sched/process.h>
 #include <kernel/mem/vmm.h>
 
 static process_t *kernel;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <kernel/sched/wq.h>
+#include <kernel/sched/types.h>
 
 typedef struct {
     spinlock_t lock;

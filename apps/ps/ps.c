@@ -86,7 +86,7 @@ int thread_state(thread_t *t)
         case 3:
             st = 'B';
             break;
-        case 5:
+        case 4:
             st = 'T';
             break;
         default:
@@ -102,7 +102,6 @@ int process_state(process_t *p)
     int R = 0;
     int S = 0;
     int B = 0;
-    int W = 0;
     int T = 0;
     int c;
 
@@ -122,9 +121,6 @@ int process_state(process_t *p)
                 break;
             case 'B':
                 B++;
-                break;
-            case 'W':
-                W++;
                 break;
             case 'T':
                 T++;
@@ -152,11 +148,6 @@ int process_state(process_t *p)
     if(B == p->nth)
     {
         return 'B';
-    }
-
-    if(W == p->nth)
-    {
-        return 'W';
     }
 
     if(T == p->nth)

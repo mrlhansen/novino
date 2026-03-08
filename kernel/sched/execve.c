@@ -1,10 +1,13 @@
 #include <kernel/sched/scheduler.h>
+#include <kernel/sched/threads.h>
+#include <kernel/sched/process.h>
 #include <kernel/sched/execve.h>
 #include <kernel/sched/elf.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/mem/map.h>
 #include <kernel/vfs/vfs.h>
+#include <kernel/vfs/fd.h>
 #include <kernel/errno.h>
 #include <string.h>
 

@@ -25,7 +25,7 @@ void list_insert(list_t *list, void *item);
 void list_insert_after(list_t *list, void *head, void *item);
 void list_insert_before(list_t *list, void *head, void *item);
 void list_append(list_t *list, void *item);
-int list_remove(list_t *list, void *item);
+bool list_remove(list_t *list, void *item);
 void *list_pop(list_t *list);
 void *list_head(list_t *list);
 void *list_iterate(list_t *list, void *item);

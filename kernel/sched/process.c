@@ -1,5 +1,7 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/process.h>
+#include <kernel/sched/threads.h>
+#include <kernel/sched/wq.h>
 #include <kernel/mem/heap.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/vfs/vfs.h>

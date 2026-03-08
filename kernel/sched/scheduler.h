@@ -1,7 +1,6 @@
 #pragma once
 
-#include <kernel/syscalls/syscalls.h>
-#include <kernel/sched/process.h>
+#include <kernel/sched/types.h>
 #include <kernel/x86/tss.h>
 #include <kernel/lists.h>
 

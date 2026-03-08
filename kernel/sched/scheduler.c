@@ -1,3 +1,4 @@
+#include <kernel/syscalls/syscalls.h>
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/kthreads.h>
 #include <kernel/x86/ioports.h>
