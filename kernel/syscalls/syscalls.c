@@ -360,3 +360,24 @@ void syscall_init()
     write_msr(MSR_GS_BASE, 0);
     write_msr(MSR_FS_BASE, 0);
 }
+
+void syscall_post_hook()
+{
+    thread_t *self;
+
+    self = thread_handle();
+    if(!self->signals)
+    {
+        return;
+    }
+
+    if(self->signals & SIGTERM)
+    {
+        thread_exit();
+    }
+
+    if(self->signals & SIGEXIT)
+    {
+        process_exit(137);
+    }
+}

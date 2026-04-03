@@ -10,6 +10,8 @@
 #include <kernel/errno.h>
 #include <string.h>
 
+// TODO: we probably need some sort of lock for modifying the process
+
 static LIST_INIT(active, process_t, plink);
 static LIST_INIT(reaped, process_t, plink);
 
@@ -90,7 +92,11 @@ pid_t process_wait(pid_t pid, int *status)
     }
 
     // wait for child
-    wq_wait(&self->wait);
+    found = wq_wait(&self->wait);
+    if(found < 0)
+    {
+        return found;
+    }
 
     // try again after unblock
     return process_wait(pid, status);
@@ -101,12 +107,33 @@ void process_exit(int status)
     process_t *self;
     process_t *child;
     process_t *parent;
+    thread_t *item;
+    thread_t *curr;
+    bool wait;
     fd_t *fd;
-
-    // TODO: we assume that the process only has a single running thread when process_exit is called
 
     self = process_handle();
     parent = self->parent;
+
+    // terminate all threads
+    curr = thread_handle();
+    item = 0;
+    wait = false;
+
+    while(item = list_iterate(&self->threads, item), item)
+    {
+        if(item != curr)
+        {
+            item->signals |= SIGTERM;
+            wq_interrupt(item);
+            wait = true;
+        }
+    }
+
+    if(wait)
+    {
+        thread_wait();
+    }
 
     // close file descriptors
     while(fd = list_head(&self->fd.list), fd)
@@ -135,6 +162,40 @@ void process_exit(int status)
 
     // exit thread
     thread_exit();
+}
+
+int process_kill(pid_t pid)
+{
+    process_t *item = 0;
+    thread_t *thread;
+
+    if(!pid)
+    {
+        return -EPERM;
+    }
+
+    while(item = list_iterate(&active, item), item)
+    {
+        if(item->pid == pid)
+        {
+            break;
+        }
+    }
+
+    if(!item)
+    {
+        return -EINVAL;
+    }
+
+    thread = item->threads.head;
+    thread->signals |= SIGEXIT;
+
+    if(thread->wq)
+    {
+        wq_interrupt(thread);
+    }
+
+    return 0;
 }
 
 process_t *process_create(const char *name, uint64_t pml4, process_t *parent)

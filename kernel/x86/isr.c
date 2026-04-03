@@ -85,7 +85,7 @@ void isr_init()
     idt_set_gate(255, isr_spurious);
 }
 
-void isr_handler(stack_t *stack)
+void isr_handler(isr_stack_t *stack)
 {
     kp_crit("isr", "Exception: #%d (%s)", stack->int_no, exception_messages[stack->int_no]);
     kp_crit("isr", "Core: #%d", smp_core_id());

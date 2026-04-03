@@ -140,6 +140,7 @@ int socket_read(int id, void *data, size_t size, int flags, socket_addr_t *addr)
     socket_data_t *chunk;
     socket_t *sk;
     fd_t *fd;
+    int status;
 
     fd = fd_find(id);
     if(!fd)
@@ -159,7 +160,11 @@ int socket_read(int id, void *data, size_t size, int flags, socket_addr_t *addr)
 
     if(!chunk)
     {
-        wq_wait(&sk->wait);
+        status = wq_wait(&sk->wait);
+        if(status < 0)
+        {
+            return status;
+        }
         chunk = list_head(&sk->list);
     }
 

@@ -1,6 +1,7 @@
 #include <kernel/syscalls/syscalls.h>
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/kthreads.h>
+#include <kernel/sched/process.h>
 #include <kernel/x86/ioports.h>
 #include <kernel/time/time.h>
 #include <kernel/x86/lapic.h>
@@ -29,7 +30,7 @@ static scheduler_t *get_scheduler()
 static void scheduler_set_thread(scheduler_t *scheduler, thread_t *thread)
 {
     scheduler->thread_current = thread;
-    scheduler->tss->rsp0 = thread->stack;
+    scheduler->tss->rsp0 = thread->rsp0;
     scheduler->xstate = thread->xstate;
     write_msr(MSR_KERNEL_GS_BASE, (uint64_t)&thread->gs);
 }
@@ -280,6 +281,27 @@ uint64_t schedule_handler(uint64_t rsp)
     rsp = thread->rsp;
     thread->state = RUNNING;
     new_pml4 = thread->parent->pml4;
+
+    if(thread->signals)
+    {
+        stack_t *stack = thread->stack;
+        if(stack->cs == 0x23)
+        {
+            if(thread->signals & SIGEXIT)
+            {
+                stack->rip = (uint64_t)process_exit;
+                stack->rdi = 137;
+                stack->ss = 0x08;
+                stack->cs = 0x10;
+            }
+            else if(thread->signals & SIGTERM)
+            {
+                stack->rip = (uint64_t)thread_exit;
+                stack->ss = 0x08;
+                stack->cs = 0x10;
+            }
+        }
+    }
 
     if(old_pml4 != new_pml4)
     {

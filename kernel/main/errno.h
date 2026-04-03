@@ -29,6 +29,7 @@ enum {
     EIO,          // IO error
     ENOTSUP,      // Not supported
     ENOINT,       // No interrupt received
+    EINTR,        // Interrupted function call
     EEXIST,       // Object already exists
     ENOMEDIUM,    // No medium present
     ENOACK,       // No ACK from device

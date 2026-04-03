@@ -60,13 +60,14 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
-    bool status;
+    bool locked;
+    int status;
     int length = 0;
     int next;
 
-    status = (wr->flags & O_NONBLOCK) ? true : false;
-    status = acquire_mutex(wr->mutex, status);
-    if(!status)
+    locked = (wr->flags & O_NONBLOCK) ? true : false;
+    locked = acquire_mutex(wr->mutex, locked);
+    if(!locked)
     {
         return 0;
     }
@@ -83,8 +84,15 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
             {
                 break;
             }
+
             wq_wake(&rd->queue);
-            wq_wait(&wr->queue);
+
+            status = wq_wait(&wr->queue);
+            if(status < 0)
+            {
+                release_mutex(wr->mutex);
+                return status;
+            }
         }
 
         pipe->data[pipe->head] = *buf++;
@@ -103,13 +111,14 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
-    bool status;
+    bool locked;
+    int status;
     int length = 0;
     int next;
 
-    status = (rd->flags & O_NONBLOCK) ? true : false;
-    status = acquire_mutex(rd->mutex, status);
-    if(!status)
+    locked = (rd->flags & O_NONBLOCK) ? true : false;
+    locked = acquire_mutex(rd->mutex, locked);
+    if(!locked)
     {
         return 0;
     }
@@ -122,7 +131,13 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
             release_mutex(rd->mutex);
             return 0;
         }
-        wq_wait(&rd->queue);
+
+        status = wq_wait(&rd->queue);
+        if(status < 0)
+        {
+            release_mutex(rd->mutex);
+            return status;
+        }
     }
 
     // Read from buffer

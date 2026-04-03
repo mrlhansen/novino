@@ -344,7 +344,7 @@ void ipv4_recv(netdev_t *dev, frame_t *frame)
         p = frame->l4.data;
     }
 
-    if(sdp.proto== 1)
+    if(sdp.proto == 1)
     {
         // ICMP
         socket_inet4_recv(SOCK_RAW, PROTO_ICMP, p, s, &sdp);

@@ -92,7 +92,7 @@ static irq_t *irq_allocate(int num)
     return irq;
 }
 
-void irq_handler(stack_t *stack)
+void irq_handler(isr_stack_t *stack)
 {
     irq_handler_item_t *item;
     irq_t *irq;

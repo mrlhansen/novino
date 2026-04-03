@@ -10,57 +10,54 @@ static LIST_INIT(dead, thread_t, slink);
 thread_t *thread_create(const char *name, void *entry, void *arg0, void *arg1, void *arg2)
 {
     thread_t *thread;
-    uint64_t *stack;
+    uint64_t rsp0;
+    stack_t *stack;
 
     thread = kzalloc(sizeof(thread_t) + fpu_xstate_size() + STACK_SIZE);
-    if(thread == 0)
+    if(!thread)
     {
         return 0;
     }
 
     // stack address (required alignment is 16 bytes)
-    thread->stack = (uint64_t)(thread + 1) + STACK_SIZE;
-    thread->stack = (thread->stack & -16UL);
+    rsp0 = (uint64_t)(thread + 1) + STACK_SIZE;
+    rsp0 = (rsp0 & -16UL);
 
-    stack = (uint64_t*)thread->stack;
+    // store stack address
+    thread->rsp0 = rsp0;
+    thread->rsp = rsp0 - sizeof(stack_t);
+    stack = thread->stack;
+
+    // initialize fpu state
     fpu_xstate_init(thread);
 
-    *--stack = 0x10;              // SS
-    *--stack = thread->stack;     // RSP
-    *--stack = 0x0202;            // RFLAGS
-    *--stack = 0x08;              // CS
-    *--stack = (uint64_t)entry;   // RIP
-    *--stack = 0;                 // RAX
-    *--stack = 0;                 // RBX
-    *--stack = 0;                 // RCX
-    *--stack = (uint64_t)arg2;    // RDX
-    *--stack = (uint64_t)arg0;    // RDI
-    *--stack = (uint64_t)arg1;    // RSI
-    *--stack = 0;                 // RBP
-    *--stack = 0;                 // R8
-    *--stack = 0;                 // R9
-    *--stack = 0;                 // R10
-    *--stack = 0;                 // R11
-    *--stack = 0;                 // R12
-    *--stack = 0;                 // R13
-    *--stack = 0;                 // R14
-    *--stack = 0;                 // R15
+    // initialize stack
+    stack->ss     = 0x10;
+    stack->rsp    = thread->rsp0;
+    stack->rflags = 0x0202;
+    stack->cs     = 0x08;
+    stack->rip    = (uint64_t)entry;
+    stack->rax    = 0;
+    stack->rbx    = 0;
+    stack->rcx    = 0;
+    stack->rdx    = (uint64_t)arg2;
+    stack->rdi    = (uint64_t)arg0;
+    stack->rsi    = (uint64_t)arg1;
+    stack->rbp    = 0;
+    stack->r8     = 0;
+    stack->r9     = 0;
+    stack->r10    = 0;
+    stack->r11    = 0;
+    stack->r12    = 0;
+    stack->r13    = 0;
+    stack->r14    = 0;
+    stack->r15    = 0;
 
+    // initialize the rest
     strscpy(thread->name, name, sizeof(thread->name));
-    thread->tid = 0;
-    thread->rsp = (uint64_t)stack;
     thread->state = READY;
-    thread->priority = 0;
-    thread->parent = 0;
-    thread->time_used = 0;
-    thread->yield = 0;
-
-    thread->gs.krsp = thread->stack;
+    thread->gs.krsp = rsp0;
     thread->gs.ursp = 0;
-
-    thread->sig.recv = 0;
-    thread->sig.wait = 0;
-    thread->sig.lock = 0;
 
     return thread;
 }
@@ -186,6 +183,11 @@ void thread_idle_cleaning()
 
         list_pop(&dead);
         process_remove_thread(item);
+
+        // TODO:
+        // When (item->signals & SIGTERM) and (this is the second-to-last thread), then
+        // signal last thread if waiting in process_exit()
+
         kfree(item);
     }
 

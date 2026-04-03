@@ -2,6 +2,7 @@
 global syscall_address
 extern syscall_table
 extern syscall_count
+extern syscall_post_hook
 
 [SECTION .text]
 syscall_entry:
@@ -27,6 +28,10 @@ syscall_entry:
 
     mov rcx, r10
     call qword [syscall_table + 8*rax]
+
+    push rax
+    call syscall_post_hook
+    pop rax
 
     pop r11               ; user rflags
     pop r10

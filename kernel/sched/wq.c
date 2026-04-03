@@ -1,6 +1,7 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/threads.h>
 #include <kernel/sched/wq.h>
+#include <kernel/errno.h>
 
 void wq_init(wq_t *wq)
 {
@@ -60,6 +61,12 @@ int wq_wait(wq_t *wq)
     list_append(&wq->list, self);
     scheduler_yield();
     restore_interrupts(&flags);
+
+    if(self->signals & SIGINTR)
+    {
+        self->signals &= ~SIGINTR;
+        return -EINTR;
+    }
 
     return 0;
 }
@@ -124,9 +131,9 @@ void wq_interrupt(thread_t *thread)
     ok = list_remove(&wq->list, thread);
     if(ok)
     {
+        thread->signals |= SIGINTR;
         thread->state = READY;
         thread->wq = 0;
-        // TODO: set a flag?
         scheduler_append(thread);
     }
 

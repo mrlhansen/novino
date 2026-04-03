@@ -3,6 +3,7 @@
 #include <kernel/sched/types.h>
 #include <kernel/sysinfo.h>
 
+int process_kill(pid_t pid);
 void process_exit(int status);
 pid_t process_wait(pid_t pid, int *status);
 

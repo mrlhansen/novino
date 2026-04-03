@@ -16,7 +16,7 @@ int fpu_xstate_size()
 
 void fpu_xstate_init(thread_t *thread)
 {
-    thread->xstate = thread->stack + 64;
+    thread->xstate = thread->rsp0 + 64;
     thread->xstate = (thread->xstate & -64UL);
     memcpy((void*)thread->xstate, fxsave, 32);
 }

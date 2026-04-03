@@ -25,7 +25,7 @@ typedef struct {
     uint64_t rflags;
     uint64_t rsp;
     uint64_t ss;
-} stack_t;
+} isr_stack_t;
 
 extern void isr0();
 extern void isr1();
