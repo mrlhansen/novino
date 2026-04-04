@@ -307,6 +307,12 @@ static long sys_mkpipe(int *fd)
     return vfs_mkpipe(fd);
 }
 
+static long sys_signal(pid_t pid, int signal)
+{
+    // TODO: We only support SIGKILL at the moment
+    return process_kill(pid);
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -339,6 +345,7 @@ const void *syscall_table[] = {
     sys_sleep,   // 26 = sleep
     sys_sysinfo, // 27 = sysinfo
     sys_mkpipe,  // 28 = mkpipe
+    sys_signal,  // 29 = signal
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

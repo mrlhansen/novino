@@ -88,7 +88,7 @@ pid_t process_wait(pid_t pid, int *status)
 
     if(!found && pid)
     {
-        return -EINVAL; // pid is not our child
+        return -ESRCH; // pid is not our child
     }
 
     // wait for child
@@ -184,7 +184,7 @@ int process_kill(pid_t pid)
 
     if(!item)
     {
-        return -EINVAL;
+        return -ESRCH;
     }
 
     thread = item->threads.head;

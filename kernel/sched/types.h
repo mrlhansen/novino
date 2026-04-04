@@ -40,26 +40,26 @@ typedef struct {
 } wq_t;
 
 typedef struct {
-    size_t r15;
-    size_t r14;
-    size_t r13;
-    size_t r12;
-    size_t r11;
-    size_t r10;
-    size_t r9;
-    size_t r8;
-    size_t rbp;
-    size_t rsi;
-    size_t rdi;
-    size_t rdx;
-    size_t rcx;
-    size_t rbx;
-    size_t rax;
-    size_t rip;
-    size_t cs;
-    size_t rflags;
-    size_t rsp;
-    size_t ss;
+    size_t r15;    // x86-64 ABI: preserve
+    size_t r14;    // x86-64 ABI: preserve
+    size_t r13;    // x86-64 ABI: preserve
+    size_t r12;    // x86-64 ABI: preserve
+    size_t r11;    // x86-64 ABI: volatile
+    size_t r10;    // x86-64 ABI: volatile
+    size_t r9;     // x86-64 ABI: volatile (6th argument)
+    size_t r8;     // x86-64 ABI: volatile (5th argument)
+    size_t rbp;    // x86-64 ABI: preserve (frame pointer)
+    size_t rsi;    // x86-64 ABI: volatile (2nd argument)
+    size_t rdi;    // x86-64 ABI: volatile (1st argument)
+    size_t rdx;    // x86-64 ABI: volatile (3rd argument)
+    size_t rcx;    // x86-64 ABI: volatile (4th argument)
+    size_t rbx;    // x86-64 ABI: preserve
+    size_t rax;    // x86-64 ABI: volatile (return value)
+    size_t rip;    // instruction pointer
+    size_t cs;     // code segment
+    size_t rflags; // status register
+    size_t rsp;    // stack pointer
+    size_t ss;     // stack segment
 } stack_t;
 
 struct thread {

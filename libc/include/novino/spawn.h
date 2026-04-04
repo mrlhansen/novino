@@ -8,3 +8,4 @@ pid_t spawnve(const char *pathname, char *const argv[], char *const envp[]);
 pid_t spawnv(const char *pathname, char *const argv[]);
 
 pid_t wait(pid_t pid, int *status);
+int signal(pid_t pid, int signal);

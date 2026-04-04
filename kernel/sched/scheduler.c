@@ -289,6 +289,7 @@ uint64_t schedule_handler(uint64_t rsp)
         {
             if(thread->signals & SIGEXIT)
             {
+                stack->rsp = thread->rsp0;
                 stack->rip = (uint64_t)process_exit;
                 stack->rdi = 137;
                 stack->ss = 0x08;
@@ -296,6 +297,7 @@ uint64_t schedule_handler(uint64_t rsp)
             }
             else if(thread->signals & SIGTERM)
             {
+                stack->rsp = thread->rsp0;
                 stack->rip = (uint64_t)thread_exit;
                 stack->ss = 0x08;
                 stack->cs = 0x10;

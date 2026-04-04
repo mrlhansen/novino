@@ -36,3 +36,14 @@ pid_t wait(pid_t pid, int *status)
     }
     return pid;
 }
+
+int signal(pid_t pid, int signal)
+{
+    pid = sys_signal(pid, signal);
+    if(pid < 0)
+    {
+        errno = -pid;
+        return -1;
+    }
+    return 0;
+}

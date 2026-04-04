@@ -12,6 +12,7 @@ enum {
     ENOTEMPTY,    // Directory is not empty
     ENODEV,       // No such device
     ENOFS,        // No such file system
+    ESRCH,        // No such process
     ENOSPC,       // No space left
     EXDEV,        // Cross-device operation not permitted
     EDOM,         // Argument out of domain
@@ -29,7 +30,7 @@ enum {
     EIO,          // IO error
     ENOTSUP,      // Not supported
     ENOINT,       // No interrupt received
-    EINTR,        // Interrupted function call
+    EINTR,        // Interrupted
     EEXIST,       // Object already exists
     ENOMEDIUM,    // No medium present
     ENOACK,       // No ACK from device

@@ -44,6 +44,9 @@ char *strerror(int errnum)
         case ENOFS:
             str = "No such file system";
             break;
+        case ESRCH:
+            str = "No such process";
+            break;
         case ENOSPC:
             str = "No space left";
             break;
@@ -94,6 +97,9 @@ char *strerror(int errnum)
             break;
         case ENOINT:
             str = "No interrupt received";
+            break;
+        case EINTR:
+            str = "Interrupted";
             break;
         case EEXIST:
             str = "Object already exists";

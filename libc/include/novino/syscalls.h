@@ -115,3 +115,6 @@ static inline long syscall(size_t id, size_t arg0, size_t arg1, size_t arg2, siz
 
 #define sys_mkpipe(fd) \
     syscall(28, (size_t)fd, 0, 0, 0, 0)
+
+#define sys_signal(pid, sig) \
+    syscall(29, pid, sig, 0, 0, 0)
