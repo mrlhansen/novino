@@ -40,17 +40,19 @@ void process_remove_thread(thread_t *thread)
 
 pid_t process_wait(pid_t pid, int *status)
 {
-    process_t *self;
     process_t *child;
+    process_t *self;
+    list_t *list;
     int found;
 
     self = process_handle();
+    list = &self->children;
     found = 0;
+    child = 0;
 
     acquire_lock(&self->lock);
 
-    child = self->children.head;
-    while(child)
+    while(child = list_iterate(list, child), child)
     {
         if(child->pid == pid)
         {
@@ -64,13 +66,11 @@ pid_t process_wait(pid_t pid, int *status)
                 break;
             }
         }
-
-        child = child->sibling.next;
     }
 
     if(child)
     {
-        list_remove(&self->children, child);
+        list_remove(list, child);
     }
 
     release_lock(&self->lock);
@@ -231,7 +231,7 @@ process_t *process_create(const char *name, uint64_t pml4, process_t *parent)
     process->pml4 = pml4;
     process->fd.next = 0;
 
-    list_init(&process->children, offsetof(process_t, sibling));
+    list_init(&process->children, offsetof(process_t, clink));
     list_init(&process->threads, offsetof(thread_t, plink));
     list_init(&process->fd.list, offsetof(fd_t, link));
     wq_init(&process->wait);

@@ -107,7 +107,7 @@ struct process {
     process_t *parent;    // Parent process
     list_t threads;       // List of threads
     list_t children;      // List of children
-    link_t sibling;       // Link in child processes
+    link_t clink;         // Link in child processes
     link_t plink;         // Link in global processes
     list_t mmap;          // List of memory maps
     spinlock_t lock;      // Lock for this struct

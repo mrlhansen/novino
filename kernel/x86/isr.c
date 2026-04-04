@@ -1,3 +1,4 @@
+#include <kernel/sched/process.h>
 #include <kernel/x86/strace.h>
 #include <kernel/x86/isr.h>
 #include <kernel/x86/idt.h>
@@ -85,22 +86,22 @@ void isr_init()
     idt_set_gate(255, isr_spurious);
 }
 
-void isr_handler(isr_stack_t *stack)
+static void isr_dump(isr_stack_t *stack)
 {
-    kp_crit("isr", "Exception: #%d (%s)", stack->int_no, exception_messages[stack->int_no]);
-    kp_crit("isr", "Core: #%d", smp_core_id());
+    kp_warn("isr", "Exception: #%d (%s)", stack->int_no, exception_messages[stack->int_no]);
+    kp_warn("isr", "Core: #%d", smp_core_id());
 
     if(stack->int_no >= 10 && stack->int_no <= 13)
     {
-        kp_crit("isr", "Error information:");
-        kp_crit("isr", "External:  %s", ((stack->error & 0x1) ? "Yes" : "No"));
+        kp_warn("isr", "Error information:");
+        kp_warn("isr", "External:  %s", ((stack->error & 0x1) ? "Yes" : "No"));
         if(stack->error & 0x02)
         {
-            kp_crit("isr", "IDT index: %d", (stack->error >> 3));
+            kp_warn("isr", "IDT index: %d", (stack->error >> 3));
         }
         else
         {
-            kp_crit("isr", "%s index: %d", ((stack->error & 0x4) ? "LDT" : "GDT"), (stack->error >> 3));
+            kp_warn("isr", "%s index: %d", ((stack->error & 0x4) ? "LDT" : "GDT"), (stack->error >> 3));
         }
     }
     else if(stack->int_no == 14)
@@ -108,32 +109,57 @@ void isr_handler(isr_stack_t *stack)
         uint64_t addr;
         asm volatile("mov %%cr2, %0" : "=r" (addr));
 
-        kp_crit("isr", "Error information:");
-        kp_crit("isr", "Page:     %s", ((stack->error & 0x1) ? "Page-level protection violation" : "Non-present page"));
-        kp_crit("isr", "Access:   %s", ((stack->error & 0x2) ? "Write" : "Read"));
-        kp_crit("isr", "Mode:     %s", ((stack->error & 0x4) ? "User" : "Kernel"));
-        kp_crit("isr", "Reserved: %s", ((stack->error & 0x8) ? "Yes" : "No"));
-        kp_crit("isr", "Fetch:    %s", ((stack->error & 0x10) ? "Yes" : "No"));
-        kp_crit("isr", "Address:  %#016lx", addr);
+        kp_warn("isr", "Error information:");
+        kp_warn("isr", "Page:     %s", ((stack->error & 0x1) ? "Page-level protection violation" : "Non-present page"));
+        kp_warn("isr", "Access:   %s", ((stack->error & 0x2) ? "Write" : "Read"));
+        kp_warn("isr", "Mode:     %s", ((stack->error & 0x4) ? "User" : "Kernel"));
+        kp_warn("isr", "Reserved: %s", ((stack->error & 0x8) ? "Yes" : "No"));
+        kp_warn("isr", "Fetch:    %s", ((stack->error & 0x10) ? "Yes" : "No"));
+        kp_warn("isr", "Address:  %#016lx", addr);
     }
     else if(stack->int_no == 19)
     {
         uint32_t mxcsr;
         asm volatile("stmxcsr %0" : "=m"(mxcsr));
 
-        kp_crit("isr", "Error information:");
-        kp_crit("isr", "MXCSR: %#x", mxcsr);
+        kp_warn("isr", "Error information:");
+        kp_warn("isr", "MXCSR: %#x", mxcsr);
     }
 
-    kp_crit("isr", "Register dumps:");
-    kp_crit("isr", "RAX: %016lx RBX: %016lx RCX: %016lx", stack->rax, stack->rbx, stack->rcx);
-    kp_crit("isr", "RDX: %016lx RDI: %016lx RSI: %016lx", stack->rdx, stack->rdi, stack->rsi);
-    kp_crit("isr", "RBP: %016lx RSP: %016lx RIP: %016lx", stack->rbp, stack->rsp, stack->rip);
-    kp_crit("isr", "R8:  %016lx R9:  %016lx R10: %016lx", stack->r8, stack->r9, stack->r10);
-    kp_crit("isr", "R11: %016lx R12: %016lx R13: %016lx", stack->r11, stack->r12, stack->r13);
-    kp_crit("isr", "R14: %016lx R15: %016lx SS:  %016lx", stack->r14, stack->r15, stack->ss);
-    kp_crit("isr", "CS:  %016lx RFLAGS: %016lx", stack->cs, stack->rflags);
+    kp_warn("isr", "Register dumps:");
+    kp_warn("isr", "RAX: %016lx RBX: %016lx RCX: %016lx", stack->rax, stack->rbx, stack->rcx);
+    kp_warn("isr", "RDX: %016lx RDI: %016lx RSI: %016lx", stack->rdx, stack->rdi, stack->rsi);
+    kp_warn("isr", "RBP: %016lx RSP: %016lx RIP: %016lx", stack->rbp, stack->rsp, stack->rip);
+    kp_warn("isr", "R8:  %016lx R9:  %016lx R10: %016lx", stack->r8, stack->r9, stack->r10);
+    kp_warn("isr", "R11: %016lx R12: %016lx R13: %016lx", stack->r11, stack->r12, stack->r13);
+    kp_warn("isr", "R14: %016lx R15: %016lx SS:  %016lx", stack->r14, stack->r15, stack->ss);
+    kp_warn("isr", "CS:  %016lx RFLAGS: %016lx", stack->cs, stack->rflags);
+}
 
-    strace(10);
-    while(1);
+void isr_handler(isr_stack_t *stack)
+{
+    process_t *pr;
+
+    if(stack->cs == 0x10)
+    {
+        isr_dump(stack);
+        strace(10);
+        while(1)
+        {
+            asm("hlt");
+        }
+    }
+
+    pr = process_handle();
+    if(pr->pid)
+    {
+        isr_dump(stack);
+        kp_warn("isr", "Terminating %s (pid %d)", pr->name, pr->pid);
+        process_exit(137);
+    }
+
+    while(1)
+    {
+        asm("hlt");
+    }
 }
