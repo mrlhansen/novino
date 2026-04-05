@@ -60,16 +60,16 @@ int pipe_write(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
-    bool locked;
-    int status;
+    bool nonblock;
     int length = 0;
+    int status;
     int next;
 
-    locked = (wr->flags & O_NONBLOCK) ? true : false;
-    locked = acquire_mutex(wr->mutex, locked);
-    if(!locked)
+    nonblock = (wr->flags & O_NONBLOCK) ? true : false;
+    status = acquire_mutex(wr->mutex, nonblock);
+    if(status < 0)
     {
-        return 0;
+        return status;
     }
 
     // Write to buffer
@@ -111,16 +111,16 @@ int pipe_read(pipe_t *pipe, int maxlen, void *data)
     pipe_io_t *rd = &pipe->rd;
     pipe_io_t *wr = &pipe->wr;
     uint8_t *buf = data;
-    bool locked;
-    int status;
+    bool nonblock;
     int length = 0;
+    int status;
     int next;
 
-    locked = (rd->flags & O_NONBLOCK) ? true : false;
-    locked = acquire_mutex(rd->mutex, locked);
-    if(!locked)
+    nonblock = (rd->flags & O_NONBLOCK) ? true : false;
+    status = acquire_mutex(rd->mutex, nonblock);
+    if(status < 0)
     {
-        return 0;
+        return status;
     }
 
     // Buffer is empty

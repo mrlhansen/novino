@@ -35,7 +35,7 @@ uint64_t system_timestamp()
         return hpet_timestamp();
     }
 
-    return (1000000UL * ticks);
+    return NANOSECONDS(ticks, TIME_MS);
 }
 
 int gettime(timeval_t *tv)

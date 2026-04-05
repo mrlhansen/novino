@@ -1,5 +1,6 @@
 #pragma once
 
+#include <kernel/time/time.h>
 #include <kernel/types.h>
 
 typedef struct {
@@ -46,7 +47,7 @@ typedef struct {
 #define PS2_SR_TMOUT   0x40
 #define PS2_SR_PARITY  0x80
 
-#define PS2_TIMEOUT 500000000UL
+#define PS2_TIMEOUT NANOSECONDS(500, TIME_MS)
 
 void ps2_kbd_init(ps2_port_t *dev);
 void ps2_mouse_init(ps2_port_t *dev);

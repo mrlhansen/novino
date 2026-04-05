@@ -10,6 +10,8 @@
 #define TIME_US 1000000UL          // Microseconds
 #define TIME_MS 1000UL             // Miliseconds
 
+#define NANOSECONDS(val,unit) (val*(TIME_NS/unit))
+
 enum {
     PIT,
     HPET,

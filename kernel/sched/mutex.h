@@ -10,5 +10,5 @@ typedef struct {
 
 int free_mutex(mutex_t *mutex);
 mutex_t *create_mutex();
-bool acquire_mutex(mutex_t *mutex, bool nonblock);
+int acquire_mutex(mutex_t *mutex, bool nonblock);
 void release_mutex(mutex_t *mutex);

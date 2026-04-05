@@ -147,7 +147,7 @@ static int ahci_poll_event(ahci_dev_t *dev, int type)
     uint64_t now, end;
 
     now = system_timestamp();
-    end = now + 100000000; // 100ms
+    end = now + NANOSECONDS(100, TIME_MS);
 
     while(now < end)
     {
@@ -545,12 +545,17 @@ static int ahci_read(void *data, size_t lba, size_t count, void *buf)
     ahci_dev_t *dev = data;
     int status;
 
-    acquire_mutex(dev->wk.mutex, false);
+    status = acquire_mutex(dev->wk.mutex, false);
+    if(status < 0)
+    {
+        return status;
+    }
+
     dev->wk.thread = thread_handle();
     status = ahci_read_core(dev, lba, count, buf);
     dev->wk.thread = 0;
-    release_mutex(dev->wk.mutex);
 
+    release_mutex(dev->wk.mutex);
     return status;
 }
 
@@ -572,12 +577,17 @@ static int ahci_write(void *data, size_t lba, size_t count, void *buf)
     ahci_dev_t *dev = data;
     int status;
 
-    acquire_mutex(dev->wk.mutex, false);
+    status = acquire_mutex(dev->wk.mutex, false);
+    if(status < 0)
+    {
+        return status;
+    }
+
     dev->wk.thread = thread_handle();
     status = ahci_write_core(dev, lba, count, buf);
     dev->wk.thread = 0;
-    release_mutex(dev->wk.mutex);
 
+    release_mutex(dev->wk.mutex);
     return status;
 }
 

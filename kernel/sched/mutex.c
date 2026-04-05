@@ -32,14 +32,13 @@ int free_mutex(mutex_t *mutex)
     return 0;
 }
 
-bool acquire_mutex(mutex_t *mutex, bool nonblock)
+int acquire_mutex(mutex_t *mutex, bool nonblock)
 {
     thread_t *thread;
-    bool locked;
     int status;
 
     thread = thread_handle();
-    locked = true;
+    status = 0;
 
     wq_lock(&mutex->queue);
 
@@ -52,7 +51,7 @@ bool acquire_mutex(mutex_t *mutex, bool nonblock)
     {
         if(nonblock)
         {
-            locked = false;
+            status = -EBUSY;
             thread->yield = 0;
         }
         else
@@ -64,17 +63,13 @@ bool acquire_mutex(mutex_t *mutex, bool nonblock)
     if(thread->yield)
     {
         status = wq_wait(&mutex->queue);
-        if(status < 0)
-        {
-            locked = false;
-        }
     }
     else
     {
         wq_unlock(&mutex->queue);
     }
 
-    return locked;
+    return status;
 }
 
 void release_mutex(mutex_t *mutex)

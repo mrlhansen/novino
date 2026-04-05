@@ -10,7 +10,7 @@ static xhci_trb_t *xhci_poll_event(xhci_t *xhci, int type)
     int slot, code;
 
     uint64_t now = system_timestamp();
-    uint64_t end = now + 100000000; // 100ms
+    uint64_t end = now + NANOSECONDS(100, TIME_MS);
 
     while(now < end)
     {
