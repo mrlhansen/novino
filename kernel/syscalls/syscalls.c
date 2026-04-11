@@ -289,8 +289,7 @@ static long sys_gettime(timeval_t *tv)
 
 static void sys_sleep(size_t ns)
 {
-    // TODO: extremely bad implementation
-    timer_sleep(ns / 1000000);
+    thread_sleep(ns);
 }
 
 static long sys_sysinfo(size_t req, size_t id, void *buf, size_t len)

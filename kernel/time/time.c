@@ -1,3 +1,4 @@
+#include <kernel/time/timer.h>
 #include <kernel/time/time.h>
 #include <kernel/time/hpet.h>
 #include <kernel/time/tsc.h>
@@ -17,10 +18,9 @@ void timer_handler(int gsi, void *data)
     ticks++;
     if((ticks % 50) == 0)
     {
-        // TOOD: We need a proper way to register timer events with a callback function,
-        // but for now we simply call this function every 50 ms.
         input_kbd_auto_repeat();
     }
+    timer_tick();
 }
 
 uint64_t system_timestamp()

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <kernel/types.h>
-#include <kernel/lists.h>
+#include <kernel/time/timer.h>
 #include <kernel/vfs/types.h>
 
 typedef struct thread thread_t;
@@ -80,6 +79,7 @@ struct thread {
     link_t slink;               // Link for threads in scheduler queue
     link_t wlink;               // Link for threads in wait queue
     wq_t *wq;                   // Current wait queue
+    timer_t timer;              // Timer used for waking up the thread
     spinlock_t *lock;           // Optional lock used for safe thread blocking
     yield_t yield;              // Thread is currently yielding
     size_t signals;             // List of signals

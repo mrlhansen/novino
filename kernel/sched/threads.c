@@ -1,5 +1,6 @@
 #include <kernel/sched/scheduler.h>
 #include <kernel/sched/process.h>
+#include <kernel/time/time.h>
 #include <kernel/mem/heap.h>
 #include <kernel/x86/smp.h>
 #include <kernel/x86/fpu.h>
@@ -162,6 +163,44 @@ void thread_wait()
     }
 
     restore_interrupts(&flags);
+}
+
+static void thread_wake(timer_t *tm)
+{
+    thread_t *thread;
+    thread = tm->data;
+    thread->state = READY;
+    scheduler_append(thread);
+}
+
+void thread_sleep(size_t ns)
+{
+    size_t now, end;
+    thread_t *thread;
+    timer_t *tm;
+
+    if(ns < NANOSECONDS(1, TIME_MS))
+    {
+        now = system_timestamp();
+        end = now + ns;
+        while(now < end)
+        {
+            now = system_timestamp();
+        }
+        return;
+    }
+
+    thread = thread_handle();
+    tm = &thread->timer;
+
+    tm->callback = thread_wake;
+    tm->period = ns;
+    tm->data = thread;
+
+    timer_start(tm);
+
+    thread->state = SLEEPING;
+    scheduler_yield();
 }
 
 void thread_idle_cleaning()
