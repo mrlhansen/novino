@@ -564,7 +564,7 @@ void xhci_init(pci_dev_t *pcidev, uint64_t address)
     xhci_init_extended_capabilities(xhci);
 
     // Stop running controller
-    if(xhci->hco->usbcmd & USBCMD_RS)
+    if((xhci->hco->usbsts & USBSTS_HCH) == 0)
     {
         xhci->hco->usbcmd &= ~USBCMD_RS;
         timer_sleep(50);
