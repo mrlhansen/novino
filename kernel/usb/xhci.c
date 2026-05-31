@@ -417,60 +417,104 @@ static int xhci_init_event_ring(xhci_t *xhci)
     return 0;
 }
 
+static void xhci_xecp_usb_legacy(xhci_t *xhci, size_t base)
+{
+    xhci_xecp_t *xecp;
+    uint32_t usblegsup;
+    uint32_t usblegctlsts;
+
+    xecp = (void*)base;
+    usblegsup = *(uint32_t*)base;
+    usblegctlsts = *(uint32_t*)(base+4);
+
+    kp_info("xhci", "usblegsup: %#08x, usblegctlsts: %#08x", usblegsup, usblegctlsts);
+
+    if(xecp->value & (1 << 16))
+    {
+        kp_info("xhci", "requesting bios handoff");
+
+        xecp->value |= (1 << 24);
+        timer_sleep(250);
+
+        if(xecp->value & (1 << 16))
+        {
+            kp_info("xhci", "bios did not release ownership");
+        }
+    }
+}
+
+static void xhci_xecp_support_protocol(xhci_t *xhci, size_t base)
+{
+    uint32_t temp = *(uint32_t*)base;
+
+    int major = (temp >> 24) & 0xF;
+    int minor = (temp >> 16) & 0xF;
+
+    temp = *(uint32_t*)(base+8);
+    uint32_t offset = (temp & 0xFF);         // Compatible Port Offset
+    uint32_t count  = ((temp >> 8) & 0xFF);  // Compatible Port Count
+    // uint32_t psic   = ((temp >> 28) & 0xF);  // Protocol Speed ID Count !!!! 7.2.2.1.2
+
+    if(count == 0 || offset == 0)
+    {
+        return;
+    }
+
+    // printk(INFO, "xhci", "ver: %d.%d, offset: %d, count: %d, psic: %d", major, minor, offset, count, psic);
+    // for(int i = 0; i < psic; i++)
+    // {
+    //     temp = *(uint32_t*)(base+0x10+4*i);
+    //     int psiv = (temp & 0xF); // Protocol Speed ID Value
+    //     int psie = ((temp >> 4) & 0x3); // Protocol Speed ID Exponent
+    //     int psim = (temp >> 16); // Protocol Speed ID Mantissa
+    //     int plt = (temp >> 6) & 0x3; // PSI Type
+    //     uint64_t speed  = psim;
+    //     for(int i = 0; i < psie; i++)
+    //     {
+    //         speed *= 1024;
+    //     }
+    //     printk(INFO, "xhci", "psiv: %d, psie: %d, psim: %d, speed: %lu, plt: %d", psiv, psie, psim, speed, plt);
+    // }
+
+    for(int i = offset; i < offset + count; i++)
+    {
+        xhci->port[i-1].major = major;
+        xhci->port[i-1].minor = minor;
+    }
+}
+
 static int xhci_init_extended_capabilities(xhci_t *xhci)
 {
-    uint64_t base, xecp;
-    uint32_t temp;
+    xhci_xecp_t *xecp;
+    uint64_t base, next;
 
-    xecp = (xhci->hcc->hccparams1 >> 16);
+    next = (xhci->hcc->hccparams1 >> 16);
     base = (uint64_t)xhci->hcc;
 
-    while(xecp)
+    while(next)
     {
-        base = base + (xecp << 2);
-        temp = *(uint32_t*)base;
-        xecp = ((temp & 0xFF00) >> 8);
+        base = base + (next << 2);
+        xecp = (xhci_xecp_t*)base;
+        next = xecp->next;
 
-        // ID 2 = Supported Protocol
-        if((temp & 0xFF) != 2)
+        // USB Legacy Support
+        if(xecp->id == 1)
         {
+            kp_info("xhci", "xecp: usb legacy support");
+            xhci_xecp_usb_legacy(xhci, base);
             continue;
         }
 
-        int major = (temp >> 24) & 0xF;
-        int minor = (temp >> 16) & 0xF;
-
-        temp = *(uint32_t*)(base+8);
-        uint32_t offset = (temp & 0xFF);         // Compatible Port Offset
-        uint32_t count  = ((temp >> 8) & 0xFF);  // Compatible Port Count
-        // uint32_t psic   = ((temp >> 28) & 0xF);  // Protocol Speed ID Count !!!! 7.2.2.1.2
-
-        if(count == 0 || offset == 0)
+        // Supported Protocol
+        if(xecp->id == 2)
         {
+            kp_info("xhci", "xecp: supported protocol");
+            xhci_xecp_support_protocol(xhci, base);
             continue;
         }
 
-        // printk(INFO, "xhci", "ver: %d.%d, offset: %d, count: %d, psic: %d", major, minor, offset, count, psic);
-        // for(int i = 0; i < psic; i++)
-        // {
-        //     temp = *(uint32_t*)(base+0x10+4*i);
-        //     int psiv = (temp & 0xF); // Protocol Speed ID Value
-        //     int psie = ((temp >> 4) & 0x3); // Protocol Speed ID Exponent
-        //     int psim = (temp >> 16); // Protocol Speed ID Mantissa
-        //     int plt = (temp >> 6) & 0x3; // PSI Type
-        //     uint64_t speed  = psim;
-        //     for(int i = 0; i < psie; i++)
-        //     {
-        //         speed *= 1024;
-        //     }
-        //     printk(INFO, "xhci", "psiv: %d, psie: %d, psim: %d, speed: %lu, plt: %d", psiv, psie, psim, speed, plt);
-        // }
-
-        for(int i = offset; i < offset + count; i++)
-        {
-            xhci->port[i-1].major = major;
-            xhci->port[i-1].minor = minor;
-        }
+        // Unsupported
+        kp_info("xhci", "xecp: unsupported (%d)", xecp->id);
     }
 
     return 0;

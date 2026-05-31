@@ -312,6 +312,13 @@ typedef struct {
     uint32_t max_payload_lo   : 16; // Max Endpoint Service Time Interval (ESIT) Payload Low
 } __attribute__((packed)) xhci_endpoint_context_t;
 
+// Extended Capability Pointer Register
+typedef volatile struct {
+    uint32_t id    : 8;
+    uint32_t next  : 8;
+    uint32_t value : 16;
+} __attribute__((packed)) xhci_xecp_t;
+
 //
 // Support structures that are not directly defined in the specification
 //
