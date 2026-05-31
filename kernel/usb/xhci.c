@@ -1,10 +1,11 @@
+#include <kernel/time/tmout.h>
+#include <kernel/time/time.h>
 #include <kernel/usb/usb.h>
 #include <kernel/usb/xhci.h>
 #include <kernel/mem/vmm.h>
 #include <kernel/mem/mmio.h>
 #include <kernel/x86/irq.h>
 #include <kernel/mem/heap.h>
-#include <kernel/time/time.h>
 #include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <string.h>
@@ -245,7 +246,7 @@ static void xhci_create_device_context(usb_dev_t *dev)
         kp_error("xhci", "device reset failed (status %d)", status);
         return;
     }
-    timer_sleep(25);
+    timer_sleep(25); // TODO: is this really needed whem we poll??
 
     // Address device again
     status = xhci_command_address_device(xhci, dev->slot_id, ctx->input_phys);
@@ -539,6 +540,7 @@ static int xhci_alloc_irq_vectors(pci_dev_t *dev, xhci_t *xhci)
 
 void xhci_init(pci_dev_t *pcidev, uint64_t address)
 {
+    tmout_t tmo;
     uint64_t hcs1int, hcs2int;
     uint32_t caplength, version;
     xhci_hcsparams1_t *hcs1 = (void*)&hcs1int;
@@ -620,10 +622,25 @@ void xhci_init(pci_dev_t *pcidev, uint64_t address)
         return;
     }
 
-    // Reset
+    // Reset controller
     xhci->hco->usbcmd |= USBCMD_HCRST;
-    timer_sleep(50);
-    kp_info("xhci", "reset finished: usbcmd %x usbsts %x", xhci->hco->usbcmd, xhci->hco->usbsts);
+
+    // Wait for reset
+    tmout_init(&tmo, 500);
+    while(!tmo.expired)
+    {
+        if((xhci->hco->usbcmd & USBCMD_HCRST) == 0)
+        {
+            break;
+        }
+        tmout_update(&tmo);
+    }
+
+    if(tmo.expired)
+    {
+        kp_warn("xhci", "timeout: host controller reset");
+        return;
+    }
 
     // Configure "Max Device Slots Enabled"
     xhci->hco->config = xhci->maxslots;
@@ -643,11 +660,21 @@ void xhci_init(pci_dev_t *pcidev, uint64_t address)
 
     // Start controller
     xhci->hco->usbcmd |= (USBCMD_RS | USBCMD_INTE | USBCMD_HSEE);
-    timer_sleep(50);
 
-    if(xhci->hco->usbsts & (USBSTS_HCH | USBSTS_CNR))
+    // Wait for start
+    tmout_init(&tmo, 500);
+    while(!tmo.expired)
     {
-        kp_error("xhci", "hco still halted");
+        if((xhci->hco->usbsts & (USBSTS_HCH | USBSTS_CNR)) == 0)
+        {
+            break;
+        }
+        tmout_update(&tmo);
+    }
+
+    if(tmo.expired)
+    {
+        kp_warn("xhci", "timeout: host controller start");
         return;
     }
 

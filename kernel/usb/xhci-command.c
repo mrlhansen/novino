@@ -1,6 +1,6 @@
+#include <kernel/time/tmout.h>
 #include <kernel/usb/usb.h>
 #include <kernel/usb/xhci.h>
-#include <kernel/time/time.h>
 #include <kernel/debug.h>
 #include <kernel/x86/strace.h> // temporary
 
@@ -8,11 +8,10 @@ static xhci_trb_t *xhci_poll_event(xhci_t *xhci, int type)
 {
     xhci_trb_t *trb;
     int slot, code;
+    tmout_t tmo;
 
-    uint64_t now = system_timestamp();
-    uint64_t end = now + NANOSECONDS(100, TIME_MS);
-
-    while(now < end)
+    tmout_init(&tmo, 500);
+    while(!tmo.expired)
     {
         trb = xhci->event.latest;
         if(trb)
@@ -32,7 +31,7 @@ static xhci_trb_t *xhci_poll_event(xhci_t *xhci, int type)
                 return trb;
             }
         }
-        now = system_timestamp();
+        tmout_update(&tmo);
     }
 
     kp_error("xhci", "polling timed out for: %d", type);
@@ -73,6 +72,19 @@ static void xhci_command_submit(xhci_ring_t *ring, uint64_t addr, uint32_t statu
         ring->cycle ^= 1;
         ring->index = 0;
     }
+}
+
+int xhci_command_reset_endpoint(xhci_t *xhci, int slot, uint64_t phys, int endpoint)
+{
+    xhci_trb_t *trb;
+    int status;
+
+    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (endpoint << 16) | (TRB_TYPE_RESET_ENDPOINT << 10));
+    xhci_ring_doorbell(xhci, 0, 0);
+    trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
+    status = (trb->status >> 24);
+
+    return status;
 }
 
 int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys)

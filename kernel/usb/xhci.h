@@ -10,6 +10,7 @@
 
 // xhci-command.c
 int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_reset_endpoint(xhci_t *xhci, int slot, uint64_t phys, int endpoint);
 int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t phys);
 int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t phys);
 int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t phys);
