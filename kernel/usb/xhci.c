@@ -240,13 +240,12 @@ static void xhci_create_device_context(usb_dev_t *dev)
     }
 
     // Reset device
-    status = xhci_command_reset_device(xhci, dev->slot_id, ctx->input_phys);
+    status = xhci_command_reset_device(xhci, dev->slot_id);
     if(status != 1 && status != 19)
     {
         kp_error("xhci", "device reset failed (status %d)", status);
         return;
     }
-    timer_sleep(25); // TODO: is this really needed whem we poll??
 
     // Address device again
     status = xhci_command_address_device(xhci, dev->slot_id, ctx->input_phys);

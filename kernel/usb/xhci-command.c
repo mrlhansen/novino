@@ -74,12 +74,12 @@ static void xhci_command_submit(xhci_ring_t *ring, uint64_t addr, uint32_t statu
     }
 }
 
-int xhci_command_reset_endpoint(xhci_t *xhci, int slot, uint64_t phys, int endpoint)
+int xhci_command_set_dequeue_pointer(xhci_t *xhci, int slot, int endpoint, uint64_t dequeue_ptr)
 {
     xhci_trb_t *trb;
     int status;
 
-    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (endpoint << 16) | (TRB_TYPE_RESET_ENDPOINT << 10));
+    xhci_command_submit(&xhci->cmd, dequeue_ptr | 1, 0, (slot << 24) | (endpoint << 16) | (TRB_TYPE_STOP_ENDPOINT << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);
@@ -87,7 +87,33 @@ int xhci_command_reset_endpoint(xhci_t *xhci, int slot, uint64_t phys, int endpo
     return status;
 }
 
-int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys)
+int xhci_command_stop_endpoint(xhci_t *xhci, int slot, int endpoint)
+{
+    xhci_trb_t *trb;
+    int status;
+
+    xhci_command_submit(&xhci->cmd, 0, 0, (slot << 24) | (endpoint << 16) | (TRB_TYPE_STOP_ENDPOINT << 10));
+    xhci_ring_doorbell(xhci, 0, 0);
+    trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
+    status = (trb->status >> 24);
+
+    return status;
+}
+
+int xhci_command_reset_endpoint(xhci_t *xhci, int slot, int endpoint)
+{
+    xhci_trb_t *trb;
+    int status;
+
+    xhci_command_submit(&xhci->cmd, 0, 0, (slot << 24) | (endpoint << 16) | (TRB_TYPE_RESET_ENDPOINT << 10));
+    xhci_ring_doorbell(xhci, 0, 0);
+    trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
+    status = (trb->status >> 24);
+
+    return status;
+}
+
+int xhci_command_reset_device(xhci_t *xhci, int slot)
 {
     xhci_trb_t *trb;
     int status;
@@ -95,7 +121,7 @@ int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys)
     // Reset Device will return Success (1) when in Addressed or Configured state
     // otherwise it will return Context State Error (19)
 
-    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (TRB_TYPE_RESET_DEVICE << 10));
+    xhci_command_submit(&xhci->cmd, 0, 0, (slot << 24) | (TRB_TYPE_RESET_DEVICE << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);
@@ -103,12 +129,12 @@ int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys)
     return status;
 }
 
-int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t phys)
+int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t input_ctx_ptr)
 {
     xhci_trb_t *trb;
     int status;
 
-    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (TRB_TYPE_EVALUATE_CONTEXT << 10));
+    xhci_command_submit(&xhci->cmd, input_ctx_ptr, 0, (slot << 24) | (TRB_TYPE_EVALUATE_CONTEXT << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);
@@ -116,12 +142,12 @@ int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t phys)
     return status;
 }
 
-int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t phys)
+int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t input_ctx_ptr)
 {
     xhci_trb_t *trb;
     int status;
 
-    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (TRB_TYPE_CONFIGURE_ENDPOINT << 10));
+    xhci_command_submit(&xhci->cmd, input_ctx_ptr, 0, (slot << 24) | (TRB_TYPE_CONFIGURE_ENDPOINT << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);
@@ -129,12 +155,12 @@ int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t phys)
     return status;
 }
 
-int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t phys)
+int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t input_ctx_ptr)
 {
     xhci_trb_t *trb;
     int status;
 
-    xhci_command_submit(&xhci->cmd, phys, 0, (slot << 24) | (TRB_TYPE_ADDRESS_DEVICE << 10));
+    xhci_command_submit(&xhci->cmd, input_ctx_ptr, 0, (slot << 24) | (TRB_TYPE_ADDRESS_DEVICE << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);
@@ -150,7 +176,7 @@ int xhci_command_enable_slot(xhci_t *xhci)
     xhci_ring_doorbell(xhci, 0, 0);
 
     event = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
-    if(event == 0)
+    if(!event)
     {
         return 0;
     }
@@ -176,7 +202,7 @@ int xhci_command_noop(xhci_t *xhci)
     xhci_trb_t *trb;
     int status;
 
-    xhci_command_submit(&xhci->cmd, 0, 0, (TRB_TYPE_CMD_NOOP << 10) | TRB_IOC);
+    xhci_command_submit(&xhci->cmd, 0, 0, (TRB_TYPE_CMD_NOOP << 10));
     xhci_ring_doorbell(xhci, 0, 0);
     trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
     status = (trb->status >> 24);

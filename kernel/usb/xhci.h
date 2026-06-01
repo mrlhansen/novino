@@ -9,11 +9,13 @@
 #define XHCI_MAX_COMMANDS 128
 
 // xhci-command.c
-int xhci_command_reset_device(xhci_t *xhci, int slot, uint64_t phys);
-int xhci_command_reset_endpoint(xhci_t *xhci, int slot, uint64_t phys, int endpoint);
-int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t phys);
-int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t phys);
-int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t phys);
+int xhci_command_set_dequeue_pointer(xhci_t *xhci, int slot, int endpoint, uint64_t tr_dequeue_ptr);
+int xhci_command_reset_endpoint(xhci_t *xhci, int slot, int endpoint);
+int xhci_command_stop_endpoint(xhci_t *xhci, int slot, int endpoint);
+int xhci_command_configure_endpoint(xhci_t *xhci, int slot, uint64_t input_ctx_ptr);
+int xhci_command_evaluate_context(xhci_t *xhci, int slot, uint64_t input_ctx_ptr);
+int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t input_ctx_ptr);
+int xhci_command_reset_device(xhci_t *xhci, int slot);
 int xhci_command_enable_slot(xhci_t *xhci);
 int xhci_command_disable_slot(xhci_t *xhci, int slot);
 int xhci_command_noop(xhci_t *xhci);
