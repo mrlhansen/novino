@@ -107,7 +107,7 @@ make_pdp_entries:
     ret
 
 make_pd_entries:
-    add eax, 10000011b           ; 2 mb pages, kernel, write, present
+    add eax, 10000011b           ; 2mb pages, kernel, write, present
 .redo:
     mov dword [edi+0], eax
     mov dword [edi+4], 0
@@ -177,6 +177,23 @@ start:
 
 [BITS 64]
 long_start:
+    mov eax, 0x80000001          ; Call cpuid instruction
+    cpuid
+    test edx, (1 << 26)          ; Test if bit 26 is set, indicating support for gigabyte pages
+    jz .unsupported
+
+    mov rax, 0x100000000         ; Physical memory offset (4 GB)
+    add rax, 10000011b           ; 1gb pages, kernel, write, present
+    mov edi, 0x51020             ; Address of the 0th PDP table, offset 4
+    mov ecx, 508                 ; Create 508 PDP entries
+
+.redo:
+    mov qword [edi], rax
+    add edi, 8                   ; Next PDP entry
+    add rax, 0x40000000          ; Location of next physical memory chunk
+    loop .redo
+
+.unsupported:
     mov edi, 0x2000              ; Address of kernel stack
     mov ecx, 0x1000              ; Size of stack (4096 * 4 bytes = 16 KB)
     xor eax, eax

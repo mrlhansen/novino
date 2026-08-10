@@ -429,14 +429,14 @@ static void xhci_xecp_usb_legacy(xhci_t *xhci, size_t base)
 
     kp_info("xhci", "usblegsup: %#08x, usblegctlsts: %#08x", usblegsup, usblegctlsts);
 
-    if(xecp->value & (1 << 16))
+    if(xecp->value & 1)
     {
         kp_info("xhci", "requesting bios handoff");
 
-        xecp->value |= (1 << 24);
+        usblegsup |= (1 << 8);
         timer_sleep(250);
 
-        if(xecp->value & (1 << 16))
+        if(xecp->value & 1)
         {
             kp_info("xhci", "bios did not release ownership");
         }
