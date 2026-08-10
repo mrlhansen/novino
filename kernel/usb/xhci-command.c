@@ -170,18 +170,18 @@ int xhci_command_address_device(xhci_t *xhci, int slot, uint64_t input_ctx_ptr)
 
 int xhci_command_enable_slot(xhci_t *xhci)
 {
-    xhci_trb_t *event;
+    xhci_trb_t *trb;
 
     xhci_command_submit(&xhci->cmd, 0, 0, (0 << 16) | (TRB_TYPE_ENABLE_SLOT << 10));
     xhci_ring_doorbell(xhci, 0, 0);
 
-    event = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
-    if(!event)
+    trb = xhci_poll_event(xhci, TRB_TYPE_COMMAND_COMPLETION);
+    if(!trb)
     {
         return 0;
     }
 
-    return (event->flags >> 24) & 0xFF;
+    return (trb->flags >> 24) & 0xFF;
 }
 
 int xhci_command_disable_slot(xhci_t *xhci, int slot)
@@ -221,7 +221,7 @@ void xhci_transfer_control(usb_dev_t *dev, usb_request_t *req, uint64_t phys, in
     uint64_t bmRequestType = req->bmRequestType;
     uint64_t wLength = req->wLength;
     uint64_t wIndex = req->wIndex;
-    uint32_t dir;
+    uint32_t dir = 0;
 
     xhci_t *xhci = usb_dev_xhci(dev);
     xhci_context_t *ctx = usb_dev_xhci_context(dev);
@@ -243,7 +243,7 @@ void xhci_transfer_control(usb_dev_t *dev, usb_request_t *req, uint64_t phys, in
     }
 
     // Status Stage
-    dir    = (trt > TRT_NO_DATA);
+    dir    = !dir;
     addr   = 0;
     status = 0;
     flags  = (dir << 16) | (TRB_TYPE_STATUS_STAGE << 10) | TRB_IOC;
