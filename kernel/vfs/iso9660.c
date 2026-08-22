@@ -18,31 +18,41 @@ static void iso9660_dirent(iso9660_dirent_t *dirent, char *filename, inode_t *in
     if(joliet)
     {
         size = dirent->filename_length / 2;
-        filename[size] = '\0';
-
         for(int i = 0; i < size; i++)
         {
-            // assume that filenames are pure ascii
+            // Assume that filenames are pure ASCII
             filename[i] = dirent->filename[2*i+1];
+
+            // Joilet names should not have ;1 but sometimes they do
+            if(filename[i] == ';')
+            {
+                size = i;
+                break;
+            }
         }
+        filename[size] = '\0';
     }
     else
     {
         size = dirent->filename_length;
-        filename[size] = '\0';
-
         for(int i = 0; i < size; i++)
         {
-            if(dirent->filename[i] == ';')
+            filename[i] = dirent->filename[i];
+            if(filename[i] == ';')
             {
-                if(dirent->filename[i-1] == '.')
+                if(filename[i-1] == '.')
                 {
-                    filename[i-1] = '\0';
+                    size = i - 1;
+                }
+                else
+                {
+                    size = i;
                 }
                 break;
             }
-            filename[i] = dirent->filename[i];
+
         }
+        filename[size] = '\0';
     }
 
     memset(inode, 0, sizeof(*inode));
@@ -120,15 +130,13 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
     iso9660_t *fs;
     inode_t inode;
     char filename[256];
-    int offset, status;
-    int ns, cs;
+    int offset, size, status;
 
     fs = ip->data;
-    ns = ip->blocks;
-    cs = 0;
+    size = ip->size;
     offset = 0;
 
-    tmpbuf = kmalloc(ip->size);
+    tmpbuf = kmalloc(size);
     if(!tmpbuf)
     {
         return -ENOMEM;
@@ -140,15 +148,14 @@ static int iso9660_walk_directory(inode_t *ip, size_t seek, void *data, const ch
         return status;
     }
 
-    while(cs < ns)
+    while(offset < size)
     {
         dirent = (void*)(tmpbuf + offset);
         offset += dirent->length;
 
-        if(dirent->length == 0)
+        if(!dirent->length)
         {
-            cs++;
-            offset = fs->bps * cs;
+            offset += fs->bps - (offset % fs->bps);
             continue;
         }
 
@@ -397,7 +404,7 @@ static void *iso9660_mount(devfs_t *dev, inode_t *inode)
     inode->uid = 0;
     inode->mode = 0555;
     inode->size = fs->root_size;
-    inode->blocks = fs->root_size / fs->bps;
+    inode->blocks = (fs->root_size + fs->bps - 1) / fs->bps;
     inode->blksz = fs->bps;
 
     kp_info("isofs", "volume identifier: %.32s", pvd->id_volume);
