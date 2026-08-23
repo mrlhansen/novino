@@ -1,3 +1,5 @@
+#define RTL8139_MODULE
+
 #include <kernel/net/ethernet.h>
 #include <kernel/net/rtl8139.h>
 #include <kernel/x86/ioports.h>
@@ -6,6 +8,36 @@
 #include <kernel/mem/mmio.h>
 #include <kernel/debug.h>
 #include <string.h>
+
+static int rtl8139_status(netdev_t *dev)
+{
+    rtl8139_t *rtl;
+    int status;
+
+    rtl = dev->data;
+    status = inportb(rtl->ioaddr + MediaStatus);
+
+    if((status & 0x04) == 0)
+    {
+        dev->flags |= NetdevLinkUp;
+
+        if(status & 0x08)
+        {
+            dev->speed = 10;
+        }
+        else
+        {
+            dev->speed = 100;
+        }
+
+        if(status & 0x40)
+        {
+            dev->flags |= NetdevFullDuplex;
+        }
+    }
+
+    return 0;
+}
 
 static int rtl8139_transmit(netdev_t *dev, void *data, int size)
 {
@@ -71,6 +103,11 @@ static void rtl8139_handler(int vector, void *data)
         rtl8139_receive(rtl);
     }
 
+    if(status & LinkChange)
+    {
+        netdev_check_status(rtl->netdev);
+    }
+
     if(status & TxOK)
     {
         // inportw(rtl->ioaddr + TxSummary);
@@ -118,10 +155,6 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     // Set receive buffer
     outportl(ioaddr + RxBufStart, phys);
 
-    // Set interrupt bits
-    bits = (RxOK | TxOK);
-    outportw(ioaddr + IntrMask, bits);
-
     // Configure Rx
     bits = (AcceptMatch | AcceptBroadcast | Wrap | RxBufLen8k);
     outportl(ioaddr + RxConfig, bits);
@@ -152,6 +185,10 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     vector = pci_irq_vector(pcidev, 0);
     irq_request(vector, rtl8139_handler, rtl);
 
+    // Set interrupt bits
+    bits = (RxOK | TxOK | LinkChange);
+    outportw(ioaddr + IntrMask, bits);
+
     // Enable receive and transmit
     bits = (CmdTxEnable | CmdRxEnable);
     outportb(ioaddr + Cmd, bits);
@@ -162,13 +199,14 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     // Register device
     static netdev_ops_t ops = {
         .transmit = rtl8139_transmit,
+        .status = rtl8139_status,
     };
 
     netdev_t *netdev = kzalloc(sizeof(*netdev));
     rtl->netdev = netdev;
 
     strcpy(netdev->name, "eth0");
-    netdev->flags = NETDEV_ETHERNET;
+    netdev->flags = NetdevEthernet;
     netdev->mac = mac;
     netdev->mtu = 1500;
     netdev->data = rtl;

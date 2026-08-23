@@ -3,6 +3,9 @@
 #include <kernel/pci/pci.h>
 #include <kernel/net/netdev.h>
 
+#ifdef RTL8139_MODULE
+
+// Registers
 enum {
     MAC0          = 0x00, // MAC address (6 bytes, write access must be 32-bit aligned)
     MAR0          = 0x08, // Multicast (8 bytes, write access must be 32-bit aligned)
@@ -23,10 +26,11 @@ enum {
     Cmd9346       = 0x50, // 93c46 command
     Config0       = 0x51, // Configuration 0
     Config1       = 0x52, // Configuration 1
+    MediaStatus   = 0x58, // Media status
     TxSummary     = 0x60, // Summary of all Tx descriptors
 };
 
-// Command
+// Commands
 enum {
     RxBufEmpty  = 0x01, // Rx buffer empty
     CmdTxEnable = 0x04, // Tx enable
@@ -34,14 +38,14 @@ enum {
     CmdReset    = 0x10, // Reset
 };
 
-// Interrupt
+// Interrupts
 enum {
     RxOK       = (1 << 0), // Receive OK
     RxError    = (1 << 1), // Receive error
     TxOK       = (1 << 2), // Transmit OK
     TxError    = (1 << 3), // Transmit error
     RxOverflow = (1 << 4), // Receive buffer overflow
-    RxUnderrun = (1 << 5), // Receive packet underrun
+    LinkChange = (1 << 5), // Link change
     RxFIFOOver = (1 << 6), // Receive FIFO overflow
 };
 
@@ -87,5 +91,7 @@ typedef struct {
     uint32_t tx_pos;
     netdev_t *netdev;
 } rtl8139_t;
+
+#endif
 
 void rtl8139_init(pci_dev_t *dev);
