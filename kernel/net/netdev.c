@@ -4,10 +4,10 @@
 #include <kernel/debug.h>
 #include <kernel/errno.h>
 #include <string.h>
-
-#include <kernel/net/arp.h>
+#include <stdio.h>
 
 static LIST_INIT(devices, netdev_t, link);
+static int eth_id = 0;
 
 // This file handles anything that has to do with the physical hardware
 // Registering devices, changing settings like speed, mac address, etc
@@ -44,8 +44,8 @@ void netdev_check_status(netdev_t *dev)
 
 int netdev_register(netdev_t *dev)
 {
-    // check if name already exists
-    // maybe a netdev_alloc function that generates a name?
+    sprintf(dev->name, "eth%d", eth_id);
+    eth_id++;
 
     list_append(&devices, dev);
     list_init(&dev->ipv4, offsetof(ipv4_addr_t, link));

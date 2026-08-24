@@ -1,5 +1,6 @@
 #include <kernel/storage/ahci.h>
 #include <kernel/net/rtl8139.h>
+#include <kernel/net/rtl8169.h>
 #include <kernel/usb/pci.h>
 
 static const pci_drv_list_t clist[] = {
@@ -8,7 +9,9 @@ static const pci_drv_list_t clist[] = {
 };
 
 static const pci_drv_list_t dlist[] = {
-    {0x10ec, 0x8139, rtl8139_init}
+    {0x10ec, 0x8139, rtl8139_init},
+    {0x10ec, 0x8168, rtl8169_init},
+    {0x10ec, 0x8169, rtl8169_init},
 };
 
 void pci_find_driver(pci_dev_t *dev)

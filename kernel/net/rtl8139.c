@@ -205,7 +205,6 @@ static void rtl8139_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     netdev_t *netdev = kzalloc(sizeof(*netdev));
     rtl->netdev = netdev;
 
-    strcpy(netdev->name, "eth0");
     netdev->flags = NetdevEthernet;
     netdev->mac = mac;
     netdev->mtu = 1500;

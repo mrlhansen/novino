@@ -1,6 +1,7 @@
 #include <kernel/mem/vmm.h>
 #include <kernel/mem/pmm.h>
 #include <kernel/errno.h>
+#include <string.h>
 
 static uint64_t mmio_offset = 0;
 
@@ -67,6 +68,9 @@ int mmio_alloc_uc_region(uint64_t size, uint32_t align, uint64_t *virt, uint64_t
         vmm_set_caching(va + offset, PAT_UC);
         offset += PAGE_SIZE;
     }
+
+    // Initialize memory
+    memset((void*)va, 0, size * PAGE_SIZE);
 
     // Store results
     *virt = va;

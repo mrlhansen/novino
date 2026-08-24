@@ -152,8 +152,6 @@ static int rtl8169_init_descriptors(rtl8169_t *rtl)
         return -ENOMEM;
     }
 
-    memset((void*)virt, 0, RxMemSize + TxMemSize); // maybe this should be done automatically
-
     rtl->rx = (void*)virt;
     rtl->rx_phys = phys;
     rtl->tx = (void*)(virt + RxMemSize);
@@ -182,6 +180,11 @@ static int rtl8169_init_descriptors(rtl8169_t *rtl)
         rtl->tx[i].addr = TxAddress;
         TxAddress += MaxTxSize;
     }
+
+    rtl->rx_pos = 0;
+    rtl->rx_len = NumRxDesc;
+    rtl->tx_pos = 0;
+    rtl->tx_len = NumTxDesc;
 
     return 0;
 }
@@ -277,7 +280,6 @@ static void rtl8169_init_device(pci_dev_t *pcidev, uint32_t ioaddr)
     netdev_t *netdev = kzalloc(sizeof(*netdev));
     rtl->netdev = netdev;
 
-    strcpy(netdev->name, "eth0");
     netdev->flags = NetdevEthernet;
     netdev->mac = mac;
     netdev->mtu = 1500;
