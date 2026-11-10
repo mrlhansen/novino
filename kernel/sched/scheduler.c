@@ -33,6 +33,8 @@ static void scheduler_set_thread(scheduler_t *scheduler, thread_t *thread)
     scheduler->tss->rsp0 = thread->rsp0;
     scheduler->xstate = thread->xstate;
     write_msr(MSR_KERNEL_GS_BASE, (uint64_t)&thread->gs);
+    write_msr(MSR_FS_BASE, thread->fs_base);
+    write_msr(MSR_GS_BASE, thread->gs_base);
 }
 
 thread_t *scheduler_get_thread()

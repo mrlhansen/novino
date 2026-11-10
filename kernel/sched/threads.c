@@ -57,6 +57,8 @@ thread_t *thread_create(const char *name, void *entry, void *arg0, void *arg1, v
     // initialize the rest
     strscpy(thread->name, name, sizeof(thread->name));
     thread->state = READY;
+    thread->fs_base = 0;
+    thread->gs_base = 0;
     thread->gs.krsp = rsp0;
     thread->gs.ursp = 0;
 

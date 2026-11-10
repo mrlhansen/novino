@@ -9,7 +9,7 @@
 #include <kernel/sysinfo.h>
 #include <kernel/types.h>
 #include <kernel/errno.h>
-#include <kernel/debug.h>
+#include <string.h>
 
 #define assert_nonzero(ptr) \
     if(ptr == 0) return -EFAULT;
@@ -143,6 +143,7 @@ static long sys_brk(size_t brk)
                 status = -ENOMEM;
                 break;
             }
+            memset((void*)end, 0, PAGE_SIZE);
             end += PAGE_SIZE;
         }
     }

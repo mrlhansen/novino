@@ -83,6 +83,8 @@ struct thread {
     spinlock_t *lock;           // Optional lock used for safe thread blocking
     yield_t yield;              // Thread is currently yielding
     size_t signals;             // List of signals
+    size_t fs_base;             // User FS base
+    size_t gs_base;             // User GS base
     struct {                    // Used for IRQ signals
         int recv;               // Signal received
         int wait;               // Waiting for signal
