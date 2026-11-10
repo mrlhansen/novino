@@ -313,6 +313,50 @@ static long sys_signal(pid_t pid, int signal)
     return process_kill(pid);
 }
 
+static long sys_rdbase(int reg, size_t *addr)
+{
+    assert_userspace(addr);
+
+    thread_t *thread;
+    thread = thread_handle();
+
+    switch(reg) {
+        case FS_BASE:
+            *addr = thread->fs_base;
+            break;
+        case GS_BASE:
+            *addr = thread->gs_base;
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    return 0;
+}
+
+static long sys_wrbase(int reg, size_t addr)
+{
+    assert_userspace(addr);
+
+    thread_t *thread;
+    thread = thread_handle();
+
+    switch(reg) {
+        case FS_BASE:
+            thread->fs_base = addr;
+            write_msr(MSR_FS_BASE, addr);
+            break;
+        case GS_BASE:
+            thread->gs_base = addr;
+            write_msr(MSR_GS_BASE, addr);
+            break;
+        default:
+            return -EINVAL;
+    }
+
+    return 0;
+}
+
 /**************************************************************************************/
 
 const void *syscall_table[] = {
@@ -346,6 +390,8 @@ const void *syscall_table[] = {
     sys_sysinfo, // 27 = sysinfo
     sys_mkpipe,  // 28 = mkpipe
     sys_signal,  // 29 = signal
+    sys_rdbase,  // 30 = rdbase
+    sys_wrbase,  // 31 = wrbase
 };
 
 const size_t syscall_count = (sizeof(syscall_table)/sizeof(syscall_table[0]));

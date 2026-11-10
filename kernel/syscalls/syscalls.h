@@ -1,5 +1,8 @@
 #pragma once
 
+#define FS_BASE  0x100
+#define GS_BASE  0x101
+
 #define MSR_STAR            0xC0000081
 #define MSR_LSTAR           0xC0000082
 #define MSR_CSTAR           0xC0000083
